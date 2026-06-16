@@ -6,3 +6,5 @@ plotly
 netCDF4
 scipy
 statsmodels
+geopandas
+shapely
