@@ -455,31 +455,27 @@ with st.sidebar:
 </div>
 """, unsafe_allow_html=True)
 
+from shapely.geometry import Polygon, Point
+
 # =========================================
-# LAND MASK — Diperbarui untuk Papua Selatan
+# LAND MASK — Menggunakan Shapely Polygon
 # =========================================
+# Kita bentuk poligon kasar yang menutup daratan Papua dari Barat ke Timur
+papua_daratan = Polygon([
+    (130.0, -3.0),  # Batas barat utara
+    (135.0, -3.0),  
+    (137.0, -4.0),  
+    (138.5, -4.5),  # Mulai melandai ke selatan (Mimika)
+    (139.0, -6.0),  # Menuju area Pulau Yos Sudarso
+    (141.0, -6.5),  # Merauke bagian utara
+    (144.0, -6.5),  # Batas timur grid kamu
+    (144.0, 0.0),   # Di-extend ke utara (luar grid) agar menutup daratan sepenuhnya
+    (130.0, 0.0)    # Kembali ke barat utara
+])
+
 def is_land(lat, lon):
-    # Zonasi 1: Kepala Burung / Papua Barat bagian barat
-    if lon >= 130.0 and lon < 134.0 and lat > -5.0: 
-        return True
-    
-    # Zonasi 2: Pesisir seputar Teluk Cendrawasih bawah
-    if lon >= 134.0 and lon < 136.0 and lat > -4.5: 
-        return True
-    
-    # Zonasi 3: Mimika dan sekitarnya
-    if lon >= 136.0 and lon < 137.5 and lat > -5.5: 
-        return True
-    
-    # Zonasi 4: Area Pulau Yos Sudarso (Dolok) yang menjorok ke selatan
-    if lon >= 137.5 and lon < 139.0 and lat > -7.4: 
-        return True
-    
-    # Zonasi 5: Merauke hingga batas spektrum timur (Papua Nugini)
-    if lon >= 139.0 and lon <= 144.0 and lat > -8.4: 
-        return True
-        
-    return False
+    # Cek apakah koordinat (lon, lat) berada di dalam poligon daratan
+    return papua_daratan.contains(Point(lon, lat))
 
     # ── KEPULAUAN KECIL ────────────────────────────────────────────────
 
