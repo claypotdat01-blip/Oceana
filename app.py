@@ -1,4 +1,4 @@
-import streamlit st
+import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -59,7 +59,7 @@ df["current_speed"] = np.sqrt(df["uo"]**2 + df["vo"]**2)
 df["Ocean_Health_Index"] = (
     0.25 * normalisasi_global(df["do"], 5.0, 7.0) +
     0.20 * normalisasi_global(df["ph"], 8.0, 8.3) +
-    0.20 * normalizations_global(df["chla"], 0.1, 0.4) +
+    0.20 * normalisasi_global(df["chla"], 0.1, 0.4) +
     0.15 * normalisasi_global(df["salinitas"], 33.5, 35.0) +
     0.20 * (1 - normalisasi_global(df["gelombang"], 0.4, 1.5))
 ) * 100
@@ -141,11 +141,11 @@ else: # Mode Prediksi
     waktu_label = f"Proyeksi {bulan_pred}"
 
 # =========================================
-# 5. GENERASI GRID SPASIAL PAPUA (KUNCI MURNI LAUT ARAFURA)
+# 5. GENERASI GRID SPASIAL PAPUA (LAUT ARAFURA FULL PENUH)
 # =========================================
-# 🌟 KUNCI COORD BOX: Batas lintang digeser ke bawah agar fokus di Laut Arafura saja!
-lat_grid = np.linspace(-9.0, -5.5, 15)  
-lon_grid = np.linspace(133.5, 141.0, 15)
+# 🌟 PELEBARAN GEOGRAFIS: Lintang (-9.0 s.d -4.5) dan Bujur dilebarkan ke kiri (131.0 s.d 141.0) dengan grid 22x22 agar bolongnya tertutup padat!
+lat_grid = np.linspace(-9.0, -4.5, 22)  
+lon_grid = np.linspace(131.0, 141.0, 22)
 lon_g, lat_g = np.meshgrid(lon_grid, lat_grid)
 
 lat_flat = lat_g.flatten()
@@ -163,8 +163,10 @@ for i in range(len(lat_flat)):
     t_lat = lat_flat[i]
     t_lon = lon_flat[i]
     
-    # Land masking daratan Merauke / Papua Selatan asli bagian kanan bawah map
-    if t_lon > 137.5 and t_lat > -8.2: 
+    # 🌟 POLIGON MASKING TOTAL: Mengunci daratan utama bagian tengah ke atas dan daratan Merauke timur secara presisi
+    if t_lon > 135.5 and t_lat > -4.0: # Daratan utama pulau tengah
+        continue
+    if t_lon > 137.2 and t_lat <= -4.0: # Daratan Merauke / Papua Selatan asli
         continue
         
     var_spasial = np.sin(t_lon * 2.0) * 2.5 + np.cos(t_lat * 1.5) * 2.0
@@ -223,13 +225,12 @@ if st.session_state.role == "nelayan":
     st.markdown(f"### 🗺️ Peta Potensi Zona Tangkap Ikan — Mode {mode} ({waktu_label})")
     
     if not df_map.empty:
-        # Kunci fokus kamera mapbox pas di tengah perairan Laut Arafura (-7.3 Lat, 137.5 Lon)
         fig_map = px.scatter_mapbox(
             df_map, lat="lat", lon="lon", color="Fisheries_Index",
-            color_continuous_scale="Turbo", zoom=5.5, mapbox_style="open-street-map",
+            color_continuous_scale="Turbo", zoom=5.4, mapbox_style="open-street-map",
             range_color=[float(df_map["Fisheries_Index"].min()), float(df_map["Fisheries_Index"].max())]
         )
-        fig_map.update_layout(mapbox=dict(center=dict(lat=-7.3, lon=137.5)), margin={"r":0,"t":40,"l":0,"b":0}, height=540)
+        fig_map.update_layout(mapbox=dict(center=dict(lat=-7.0, lon=136.2)), margin={"r":0,"t":40,"l":0,"b":0}, height=540)
         st.plotly_chart(fig_map, use_container_width=True)
         
         st.write("---")
@@ -279,10 +280,10 @@ else:
             
             fig_map = px.scatter_mapbox(
                 df_map, lat="lat", lon="lon", color=parameter,
-                color_continuous_scale=cmap, zoom=5.4, mapbox_style="open-street-map",
+                color_continuous_scale=cmap, zoom=5.3, mapbox_style="open-street-map",
                 range_color=[float(df_map[parameter].min()), float(df_map[parameter].max())]
             )
-            fig_map.update_layout(mapbox=dict(center=dict(lat=-7.3, lon=137.5)), margin={"r":0,"t":40,"l":0,"b":0}, height=500)
+            fig_map.update_layout(mapbox=dict(center=dict(lat=-7.0, lon=136.2)), margin={"r":0,"t":40,"l":0,"b":0}, height=500)
             st.plotly_chart(fig_map, use_container_width=True)
             
     with tab2:
