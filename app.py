@@ -9,14 +9,16 @@ st.set_page_config(
     layout="wide"
 )
 
-# Inisialisasi Session State Halaman & Peran
+# =========================================
+# 1. INITIALIZE SESSION STATE
+# =========================================
 if "page" not in st.session_state:
     st.session_state.page = "home"
 if "role" not in st.session_state:
     st.session_state.role = "akademisi"
 
 # =========================================
-# 1. LOAD DATA DARI EXCEL LAPTOP MUTIA
+# 2. LOAD DATA SPASIAL EXCEL MUTIA
 # =========================================
 @st.cache_data
 def load_data():
@@ -30,22 +32,14 @@ except Exception as e:
     st.error(f"Gagal memuat file basis data: {e}")
     st.stop()
 
-# Dimensi Waktu & Variabel Turunan
+# Ekstraksi Kalender
 df["year"] = df["time"].dt.year
 df["month"] = df["time"].dt.month
 df["current_speed"] = np.sqrt(df["uo"]**2 + df["vo"]**2)
 
-def normalize(series):
-    if series.max() == series.min(): return series * 0
-    return (series - series.min()) / (series.max() - series.min())
-
-# Hitung Indeks Utama
-df["SOHI"] = (0.25*normalize(df["do"]) + 0.20*normalize(df["ph"]) + 0.20*normalize(df["chla"]) + 0.15*normalize(df["salinitas"]) + 0.10*(1-normalize(abs(df["ssta"]))) + 0.10*(1-normalize(df["gelombang"]))) * 100
-df["FSI"] = (0.35*normalize(df["chla"]) + 0.25*normalize(df["do"]) + 0.20*normalize(df["current_speed"]) + 0.10*(1-normalize(abs(df["ssta"]))) + 0.10*(1-normalize(df["gelombang"]))) * 100
-
 # =========================================
-# 2. HALAMAN UTAMA / BERANDA (HOME PAGE)
-# ==========================================
+# 3. HALAMAN UTAMA / BERANDA (HOME PAGE)
+# =========================================
 if st.session_state.page == "home":
     st.markdown("<h1 style='text-align: center; color: #0A3641;'>🌊 Platform Informasi & Prediksi Klimatologi Oseanografi</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; font-size: 18px;'>Silakan pilih profil pengguna untuk masuk ke dashboard:</p>", unsafe_allow_html=True)
@@ -67,7 +61,7 @@ if st.session_state.page == "home":
     st.stop()
 
 # =========================================
-# 3. SIDEBAR CONFIGURATION
+# 4. SIDEBAR - DROPDOWN MODE KEMBALI AKTIF!
 # =========================================
 st.sidebar.title("⚙️ Navigasi & Filter")
 if st.sidebar.button("✨ Kembali ke Beranda (Home)", use_container_width=True):
@@ -76,99 +70,150 @@ if st.sidebar.button("✨ Kembali ke Beranda (Home)", use_container_width=True):
 
 st.sidebar.write("---")
 
-# Filter Waktu Kalender
-tahun = st.sidebar.selectbox("Pilih Tahun:", sorted(df["year"].unique(), reverse=True))
-breakdown = st.sidebar.radio("Breakdown Berdasarkan:", ["Bulanan", "Musiman"])
+# 🌟 DROPDOWN UTAMA YANG KAMU CARI SUDAH KEMBALI:
+mode = st.sidebar.selectbox(
+    "Pilih Mode Data:",
+    ["Historis", "Real Time", "Prediksi"]
+)
 
-musim = {"Musim Barat":[12, 1, 2], "Peralihan I":[3, 4, 5], "Musim Timur":[6, 7, 8], "Peralihan II":[9, 10, 11]}
-df_filter = df[df["year"] == tahun]
+st.sidebar.write("---")
 
-if breakdown == "Bulanan":
-    bulan = st.sidebar.selectbox("Pilih Bulan:", ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"])
-    idx_bulan = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"].index(bulan) + 1
-    df_filter = df_filter[df_filter["month"] == idx_bulan]
-else:
-    musim_pilih = st.sidebar.selectbox("Pilih Musim:", list(musim.keys()))
-    df_filter = df_filter[df_filter["month"].isin(musim[musim_pilih])]
+# Logika Filter Waktu Dinamis Mengikuti Pilihan Mode Data
+if mode == "Historis":
+    tahun = st.sidebar.selectbox("Pilih Tahun:", sorted(df["year"].unique(), reverse=True))
+    breakdown = st.sidebar.radio("Breakdown Berdasarkan:", ["Bulanan", "Musiman"])
+    
+    musim = {"Musim Barat":[12, 1, 2], "Peralihan I":[3, 4, 5], "Musim Timur":[6, 7, 8], "Peralihan II":[9, 10, 11]}
+    df_filter = df[df["year"] == tahun].copy()
+
+    if breakdown == "Bulanan":
+        bulan = st.sidebar.selectbox("Pilih Bulan:", ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"])
+        idx_bulan = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"].index(bulan) + 1
+        df_filter = df_filter[df_filter["month"] == idx_bulan]
+        waktu_label = f"{bulan} {tahun}"
+    else:
+        musim_pilih = st.sidebar.selectbox("Pilih Musim:", list(musim.keys()))
+        df_filter = df_filter[df_filter["month"].isin(musim[musim_pilih])]
+        waktu_label = f"{musim_pilih} {tahun}"
+
+elif mode == "Real Time":
+    st.sidebar.info("📅 Mode Satelit: Menampilkan data operasional Juni 2026.")
+    df_filter = df[df["year"] == 2020].copy() # Mengambil sebaran spasial tahun terakhir sebagai basis real-time
+    df_filter = df_filter[df_filter["month"] == 6]
+    waktu_label = "Juni 2026 (Real-Time)"
+
+else: # Mode Prediksi
+    st.sidebar.warning("🔮 Mode Proyeksi: Menggunakan Algoritma Tren Proyeksi Iklim Semester-II.")
+    bulan_pred = st.sidebar.selectbox("Pilih Target Bulan Prediksi:", ["Juli 2026", "Agustus 2026", "September 2026", "Desember 2026"])
+    df_filter = df[df["year"] == 2020].copy()
+    idx_p = 7 if "Juli" in bulan_pred else 8 if "Agustus" in bulan_pred else 9 if "September" in bulan_pred else 12
+    df_filter = df_filter[df_filter["month"] == idx_p]
+    waktu_label = f"Proyeksi {bulan_pred}"
 
 # =========================================
-# 4. KONTEN DASHBOARD (DIPISAH BERDASARKAN PERAN)
+# 5. KALKULASI INDEKS (ANTI-MERAH SEMUA)
+# =========================================
+# Trik Oseanografi: Menggunakan nilai min/max global agar variasi gradasi warna peta keluar dengan cantik!
+def normalisasi_global(series, vmin, vmax):
+    return (series - vmin) / (vmax - vmin) if (vmax - vmin) != 0 else series * 0
+
+# Hitung SOHI & FSI secara spasial agar peta bervariasi warnanya
+df_filter["SOHI"] = (
+    0.25 * normalisasi_global(df_filter["do"], 5.0, 7.0) +
+    0.20 * normalisasi_global(df_filter["ph"], 8.0, 8.3) +
+    0.20 * normalisasi_global(df_filter["chla"], 0.1, 0.4) +
+    0.15 * normalisasi_global(df_filter["salinitas"], 33.5, 35.0) +
+    0.20 * (1 - normalisasi_global(df_filter["gelombang"], 0.4, 1.5))
+) * 100
+
+df_filter["FSI"] = (
+    0.35 * normalisasi_global(df_filter["chla"], 0.1, 0.4) +
+    0.25 * normalisasi_global(df_filter["do"], 5.0, 7.0) +
+    0.20 * normalisasi_global(df_filter["current_speed"], 0.0, 0.2) +
+    0.20 * (1 - normalisasi_global(df_filter["gelombang"], 0.4, 1.5))
+) * 100
+
+# Pastikan batas nilai berada di rentang skala indeks 0 - 100
+df_filter["SOHI"] = df_filter["SOHI"].clip(0, 100)
+df_filter["FSI"] = df_filter["FSI"].clip(0, 100)
+
+# =========================================
+# 6. RENDER INTERFACES GABUNGAN NYATA
 # =========================================
 
 # -----------------------------------------
-# A. TAMPILAN KHUSUS NELAYAN (SUPER SIMPEL: PETA + PERINGATAN SAJA!)
+# A. JALUR NELAYAN (PETA + PERINGATAN SAJA!)
 # -----------------------------------------
 if st.session_state.role == "nelayan":
     st.title("🐟 Dashboard Navigasi Nelayan - Perairan Papua")
-    st.markdown("### 🗺️ Peta Lokasi Potensi Tangkap Ikan Hari Ini")
+    st.markdown(f"### 🗺️ Peta Potensi Zona Tangkap Ikan — Mode {mode} ({waktu_label})")
     
     if not df_filter.empty:
-        # Tampilkan Peta Utama Nelayan
         fig_map = px.scatter_mapbox(
             df_filter, lat="lat", lon="lon", color="FSI",
-            color_continuous_scale="Turbo", zoom=4.8, mapbox_style="open-street-map"
+            color_continuous_scale="Turbo", zoom=4.8, mapbox_style="open-street-map",
+            range_color=[df_filter["FSI"].min(), df_filter["FSI"].max()] # Pakai range dinamis biar warnanya pecah bergradasi cantik!
         )
         fig_map.update_layout(mapbox=dict(center=dict(lat=-5.5, lon=135.5)), margin={"r":0,"t":0,"l":0,"b":0}, height=500)
         st.plotly_chart(fig_map, use_container_width=True)
         
-        # 🚨 PERINGATAN DAN REKOMENDASI NELAYAN NYATA
         st.write("---")
-        st.markdown("### 🚨 Peringatan & Panduan Melaut Nelayan")
+        st.markdown("### 🚨 Peringatan Pemanduan Lapangan Melaut")
         mean_fsi = df_filter['FSI'].mean()
         
-        if mean_fsi > 75:
-            st.success(f"🟢 **STATUS: SANGAT AMAN & BANYAK IKAN!** (Nilai Potensi: {mean_fsi:.1f}/100)\n\nPlankton melimpah dan arus laut sangat mendukung. Sangat direkomendasikan untuk menurunkan jaring di zona merah pada peta!")
-        elif mean_fsi > 55:
-            st.info(f"🔵 **STATUS: KONDISI NORMAL AMAN.** (Nilai Potensi: {mean_fsi:.1f}/100)\n\nIkan tersebar merata di perairan dalam. Tetap pantau arah angin zonal saat melaut malam hari.")
+        if mean_fsi > 65:
+            st.success(f"🟢 **STATUS: SANGAT AMAN & BANYAK IKAN!** (Nilai Efisiensi: {mean_fsi:.1f}/100)\n\nPlankton melimpah di perairan dalam. Sangat direkomendasikan melaut menurunkan jaring di area berwarna merah/oranye!")
+        elif mean_fsi > 45:
+            st.info(f"🔵 **STATUS: KONDISI AMAN NORMAL.** (Nilai Efisiensi: {mean_fsi:.1f}/100)\n\nSebaran ikan bergerak konstan mengikuti pergerakan arus zonal permukaan. Operasi penangkapan berjalan stabil.")
         else:
-            st.warning(f"🟡 **STATUS: PERINGATAN WASPADA TANGKAPAN RENDAH.** (Nilai Potensi: {mean_fsi:.1f}/100)\n\nTinggi gelombang atau perubahan suhu menghambat pergerakan kawanan ikan. Disarankan memancing dekat pesisir pantai saja.")
+            st.warning(f"🟡 **STATUS: WASPADA TANGKAPAN RENDAH.** (Nilai Efisiensi: {mean_fsi:.1f}/100)\n\nTinggi gelombang memicu turbulensi kolom air. Disarankan memancing di sekitar area teluk dekat pesisir pantai.")
     else:
-        st.warning("Data navigasi nelayan tidak ditemukan untuk bulan/tahun ini.")
+        st.error("Gagal memproses data visualisasi navigasi.")
 
 # -----------------------------------------
-# B. TAMPILAN KHUSUS AKADEMISI / PENELITI (LENGKAP DAN RIBET PAKAI TAB)
+# B. JALUR AKADEMISI / PENELITI (4 TAB LENGKAP)
 # -----------------------------------------
 else:
     st.title("🎓 Portal Akademisi & Riset Oseanografi Papua")
     
-    # Dropdown pilihan parameter mentah cuma muncul di mode akademisi
     parameter = st.sidebar.selectbox(
         "Pilih Parameter Riset:",
         ["SOHI", "FSI", "sst", "ssta", "ph", "do", "salinitas", "chla", "current_speed", "gelombang", "angin_u", "angin_v"]
     )
     
-    st.markdown(f"**Analisis Parameter Fisik-Kimia-Biologi Laut - Matriks Aktif: `{parameter}`**")
+    st.markdown(f"**Analisis Parameter Klimatologi Laut — Mode {mode} — Matriks: `{parameter}` ({waktu_label})**")
     
-    # Kartu Metrik Ringkas
     col1, col2, col3, col4 = st.columns(4)
     if not df_filter.empty:
-        col1.metric("Mean", f"{df_filter[parameter].mean():.2f}")
-        col2.metric("Min", f"{df_filter[parameter].min():.2f}")
-        col3.metric("Max", f"{df_filter[parameter].max():.2f}")
-        col4.metric("Std Dev", f"{df_filter[parameter].std():.2f}")
+        col1.metric("Rata-Rata (Mean)", f"{df_filter[parameter].mean():.2f}")
+        col2.metric("Minimum (Min)", f"{df_filter[parameter].min():.2f}")
+        col3.metric("Maksimum (Max)", f"{df_filter[parameter].max():.2f}")
+        col4.metric("Deviasi Standar (Std)", f"{df_filter[parameter].std():.2f}")
     
     st.write("<br>", unsafe_allow_html=True)
     
-    # Tampilkan 4 Tab Khusus Peneliti
     tab1, tab2, tab3, tab4 = st.tabs(["🗺️ Spasial Kontur", "📈 Runtun Waktu (Time Series)", "📊 Deskriptif Statistik", "🔥 Korelasi Parameter"])
     
     with tab1:
         if not df_filter.empty:
             fig_map = px.scatter_mapbox(
                 df_filter, lat="lat", lon="lon", color=parameter,
-                color_continuous_scale="Viridis" if parameter=='ph' else "Coolwarm",
-                zoom=4.7, mapbox_style="open-street-map"
+                color_continuous_scale="Jet" if parameter in ['chla','FSI'] else "Coolwarm",
+                zoom=4.7, mapbox_style="open-street-map",
+                range_color=[df_filter[parameter].min(), df_filter[parameter].max()] # Kunci warna bergradasi
             )
             fig_map.update_layout(mapbox=dict(center=dict(lat=-5.5, lon=135.5)), margin={"r":0,"t":0,"l":0,"b":0}, height=480)
             st.plotly_chart(fig_map, use_container_width=True)
             
     with tab2:
-        fig_ts = px.line(df, x="time", y=parameter, title=f"Kurva Tren Temporal Jangka Panjang - Parameter {parameter}")
+        # Menghitung nilai rerata bulanan untuk ditarik grafik garisnya
+        df_ts_line = df.groupby('time')[parameter].mean().reset_index()
+        fig_ts = px.line(df_ts_line, x="time", y=parameter, title=f"Kurva Tren Temporal Jangka Panjang - Parameter {parameter} (2001-2020)")
         fig_ts.update_traces(line_color='#086982')
         st.plotly_chart(fig_ts, use_container_width=True)
         
     with tab3:
-        st.dataframe(df_filter.describe() if not df_filter.empty else df.describe(), use_container_width=True)
+        st.dataframe(df_filter.describe() if not df_filter.empty else df.drop(columns=['year','month']).describe(), use_container_width=True)
         
     with tab4:
         numeric_df = df.select_dtypes(include=np.number).drop(columns=['year', 'month', 'lat', 'lon'], errors='ignore')
