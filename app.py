@@ -9,7 +9,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# 🌟 FUNGSI DEFINISI TARUH PALING ATAS AGAR TIDAK EROR NAMEERROR
 def normalisasi_global(series, vmin, vmax):
     if (vmax - vmin) == 0: return series * 0
     return (series - vmin) / (vmax - vmin)
@@ -35,7 +34,6 @@ def load_data():
         
     df_data["time"] = pd.to_datetime(df_data["time"])
     
-    # Deteksi dan amankan parameter mentah jika kolom tidak langsung ada di CSV
     if "uo" not in df_data.columns: df_data["uo"] = -0.05
     if "vo" not in df_data.columns: df_data["vo"] = -0.01
     if "sst" not in df_data.columns: df_data["sst"] = 28.5 + (df_data["uo"] * 5)
@@ -57,7 +55,7 @@ df["year"] = df["time"].dt.year
 df["month"] = df["time"].dt.month
 df["current_speed"] = np.sqrt(df["uo"]**2 + df["vo"]**2)
 
-# Kalkulasi Indeks Rerata Jangka Panjang untuk suplai grafik
+# Kalkulasi Indeks Rerata Jangka Panjang
 df["Ocean_Health_Index"] = (
     0.25 * normalisasi_global(df["do"], 5.0, 7.0) +
     0.20 * normalisasi_global(df["ph"], 8.0, 8.3) +
@@ -113,7 +111,6 @@ mode = st.sidebar.selectbox(
 
 st.sidebar.write("---")
 
-# Filter Waktu Mengikuti Mode Pilihan
 if mode == "Historis":
     tahun = st.sidebar.selectbox("Pilih Tahun:", sorted(df["year"].unique(), reverse=True))
     breakdown = st.sidebar.radio("Breakdown Berdasarkan:", ["Bulanan", "Musiman"])
@@ -144,10 +141,11 @@ else: # Mode Prediksi
     waktu_label = f"Proyeksi {bulan_pred}"
 
 # =========================================
-# 5. GENERASI GRID SPASIAL PAPUA
+# 5. GENERASI GRID SPASIAL PAPUA (MASKING TELUK DIPERBAIKI LENGKAP!)
 # =========================================
-lat_grid = np.linspace(-9.0, -1.5, 18)  
-lon_grid = np.linspace(130.0, 141.0, 18)
+# Pakai grid 20x20 biar makin halus dan teluknya bisa terisi bintik data dengan padat sempurna
+lat_grid = np.linspace(-9.0, -1.5, 20)  
+lon_grid = np.linspace(130.0, 141.0, 20)
 lon_g, lat_g = np.meshgrid(lon_grid, lat_grid)
 
 lat_flat = lat_g.flatten()
@@ -165,8 +163,12 @@ for i in range(len(lat_flat)):
     t_lat = lat_flat[i]
     t_lon = lon_flat[i]
     
-    if t_lon > 134.5 and (-5.5 < t_lat < -2.5): continue
-    if t_lon > 136.2 and t_lat <= -5.5: continue
+    # 🌟 LOGIKA MASKING BARU: Membuka celah teluk (Kaimana/Timika) agar dot-nya muncul!
+    # Hanya mengunci daerah daratan pegunungan tengah ke atas dan daratan Merauke bawah asli
+    if t_lon > 135.5 and (-4.0 < t_lat < -2.2): # Pegunungan Tengah Papua asli
+        continue
+    if t_lon > 137.0 and t_lat <= -4.0: # Daratan Merauke / Papua Selatan asli
+        continue
         
     var_spasial = np.sin(t_lon * 1.5) * 3.0 + np.cos(t_lat * 1.2) * 2.5
     
