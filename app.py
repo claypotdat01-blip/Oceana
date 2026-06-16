@@ -668,7 +668,7 @@ def make_wave_rose(df_src, title="Rose Diagram Gelombang"):
     )
     return fig
 
-# 🌟 REVISI STATUS: Klasifikasi numerik dinamis berbasis kuantil data nyata
+# 🌟 KLASIFIKASI AMBANG BATAS DATA NYATA
 p25_val = float(df_map["Fisheries_Index"].quantile(0.25))
 p75_val = float(df_map["Fisheries_Index"].quantile(0.75))
 
@@ -719,7 +719,7 @@ if st.session_state.role == "nelayan":
     if not df_map.empty:
         st.plotly_chart(render_map(df_map, "Fisheries_Index", "Turbo"), use_container_width=True)
 
-    # 🌟 REVISI: Penambahan Legend Klasifikasi Threshold di Bawah Peta
+    # 🌟 BOX COMPONENT: Kotak Komponen Legenda Ambang Batas Spasial
     st.markdown(f"""
 <div style="background:#FFFFFF; border:1px solid #D6E4F0; border-radius:8px; padding:14px 20px; margin-top:-10px; margin-bottom:24px;">
   <div style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#5A7FA0; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:8px;">LEGENDA KLASIFIKASI AMBANG BATAS (THRESHOLD LEGEND)</div>
@@ -751,7 +751,7 @@ if st.session_state.role == "nelayan":
     with rc2:
         st.plotly_chart(make_wave_rose(df_rose_src, f"Arah & Tinggi Gelombang · {waktu_label}"), use_container_width=True)
 
-    # 🌟 REVISI ARAH ANGIN SINKRON: Lacak arah datang angin dominan dari data asli untuk rekomendasi cerdas
+    # 🌟 SINKRONISASI MATEMATIS ARAH ANGIN DOMINAN
     speed_w = np.sqrt(df_rose_src["angin_u"]**2 + df_rose_src["angin_v"]**2)
     dir_rad = np.arctan2(-df_rose_src["angin_u"], -df_rose_src["angin_v"])
     dir_deg = float(((np.degrees(dir_rad).mean() + 360) % 360))
@@ -764,7 +764,7 @@ if st.session_state.role == "nelayan":
         if status["text"] == "SANGAT BAIK":
             st.success(f"**Area oranye/merah pada peta direkomendasikan.** Nutrisi laut melimpah. Angin dominan terpantau berembus dari arah **{arah_nama}** ({dir_deg:.0f}°), turunkan jaring di perairan dalam Arafura.")
         elif status["text"] == "NORMAL":
-            st.info(f"**Kondisi normal.** Angin dominan bertiup dari arah **{arah_nama}** ({dir_deg:.0f}°). Kawanan pelagis bergerak aktif mengikuti dinamika sirkulasi massa air permukaan.")
+            st.info(f"**Kondisi normal.** Angin dominan bertiup dari arah **{arah_nama}** ({dir_deg:.0f}°). Kawanan pelagis bergerak aktif mengikuti dinamika sirculasi massa air permukaan.")
         else:
             st.warning(f"**Potensi tangkapan rendah.** Fluktuasi iklim kurang stabil. Disarankan memancing di sekitar area pesisir dekat teluk dan muara sungai.")
     with col_r2:
@@ -820,7 +820,13 @@ else:
 
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["  Spasial  ", "  Time Series  ", "  Statistik  ", "  Korelasi  ", "  Rose Diagram  "])
+    PARAM_TERARAH = ["angin_u", "angin_v", "gelombang"]
+    tampilkan_rose = parameter in PARAM_TERARAH
+
+    if tampilkan_rose:
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["  Spasial  ", "  Time Series  ", "  Statistik  ", "  Korelasi  ", "  Rose Diagram  "])
+    else:
+        tab1, tab2, tab3, tab4 = st.tabs(["  Spasial  ", "  Time Series  ", "  Statistik  ", "  Korelasi  "])
 
     with tab1:
         cmap_dict = {
@@ -898,7 +904,7 @@ else:
 """, unsafe_allow_html=True)
 
     with tab4:
-        numeric_df = df.select_dtypes(include=np.number).drop(columns=["year","month"], errors="ignore")
+        numeric_df = df.select_dtypes(include=np.number).drop(columns=["year","month", "lat", "lon"], errors="ignore")
         fig_corr = px.imshow(
             numeric_df.corr(), text_auto=".2f",
             color_continuous_scale=[[0,"#EBF3FB"],[0.5,"#5A9EC8"],[1,"#0D1F33"]],
@@ -915,14 +921,14 @@ else:
         fig_corr.update_traces(textfont=dict(size=8, color="#0D1F33"))
         st.plotly_chart(fig_corr, use_container_width=True)
 
-    with tab5:
-        st.markdown('<div class="section-label">ROSE DIAGRAM MURNI — DINAMIKA ATMOSFER DAN GELOMBANG LAUT ARAFURA</div>', unsafe_allow_html=True)
-        df_rose_src = df_filter_base if not df_filter_base.empty else df
-        rc1, rc2 = st.columns(2)
-        with rc1:
-            st.plotly_chart(make_wind_rose(df_rose_src, f"Arah & Kecepatan Angin Murni · {waktu_label}"), use_container_width=True)
-        with rc2:
-            st.plotly_chart(make_wave_rose(df_rose_src, f"Arah & Tinggi Gelombang Murni · {waktu_label}"), use_container_width=True)
-        st.markdown("""
+    if tampilkan_rose:
+        with tab5:
+            st.markdown('<div class="section-label">ROSE DIAGRAM MURNI — DINAMIKA ATMOSFER DAN GELOMBANG LAUT ARAFURA</div>', unsafe_allow_html=True)
+            df_rose_src = df_filter_base if not df_filter_base.empty else df
+            if parameter in ("angin_u", "angin_v"):
+                st.plotly_chart(make_wind_rose(df_rose_src, f"Arah & Kecepatan Angin Murni · {waktu_label}"), use_container_width=True)
+            else:
+                st.plotly_chart(make_wave_rose(df_rose_src, f"Arah & Tinggi Gelombang Murni · {waktu_label}"), use_container_width=True)
+            st.markdown("""
 <div class="data-note">Rose diagram dibangun dari komponen angin zonal (U) dan meridional (V) menggunakan konvensi meteorologis (arah dari mana angin datang). Arah gelombang menggunakan proxy arah arus permukaan (uo, vo).</div>
 """, unsafe_allow_html=True)
