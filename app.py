@@ -107,17 +107,15 @@ else: # Mode Prediksi
     waktu_label = f"Proyeksi {bulan_pred}"
 
 # =========================================
-# 5. GENERASI GRID SPASIAL LENGKAP PARAMETER MENTAH
+# 5. GENERASI GRID SPASIAL PAPUA (MASKING DIPERKETAT)
 # =========================================
-lat_grid = np.linspace(-9.0, -2.0, 15)
-lon_grid = np.linspace(130.0, 141.0, 15)
+lat_grid = np.linspace(-9.0, -2.0, 16)
+lon_grid = np.linspace(130.0, 141.0, 16)
 lon_g, lat_g = np.meshgrid(lon_grid, lat_grid)
 
 lat_flat = lat_g.flatten()
 lon_flat = lon_g.flatten()
-mask_daratan = (lat_flat > -6.0) & (lon_flat > 135.0)
 
-# Ambil nilai acuan utama dari file CSV asli
 if (not df_filter_base.empty) and ("Ocean_Health_Index" in df_filter_base.columns):
     val_ohi_base = df_filter_base["Ocean_Health_Index"].mean()
     val_fsi_base = df_filter_base["Fisheries_Index"].mean()
@@ -129,17 +127,23 @@ else:
 records = []
 np.random.seed(42)
 for i in range(len(lat_flat)):
-    if mask_daratan[i]:
-        continue
+    t_lat = lat_flat[i]
+    t_lon = lon_flat[i]
     
-    # Efek variabilitas sebaran geografis perairan Papua
-    var_spasial = np.sin(lon_flat[i] * 1.5) * 3.0 + np.cos(lat_flat[i] * 1.2) * 2.5
+    # 🌟 KUNCI FIX KOORDINAT: Batasan poligon land-masking diperketat agar titik daratan hilang total!
+    if t_lon > 134.0 and t_lat > -5.0:  # Memotong pulau utama bagian utara & tengah
+        continue
+    if t_lon > 136.5 and t_lat > -8.5:  # Memotong Merauke dan Papua Selatan
+        continue
+    if t_lon > 133.2 and t_lat > -3.5:  # Memotong area leher burung pulau barat
+        continue
+        
+    var_spasial = np.sin(t_lon * 1.5) * 3.0 + np.cos(t_lat * 1.2) * 2.5
     noise = np.random.normal(0, 0.4)
     
-    # Rekonstruksi data mentah lengkap secara spasial berdasarkan basis indeks kelautan
     records.append({
-        'lat': lat_flat[i],
-        'lon': lon_flat[i],
+        'lat': t_lat,
+        'lon': t_lon,
         'Ocean_Health_Index': np.clip(val_ohi_base + var_spasial + noise, 10, 100),
         'Fisheries_Index': np.clip(val_fsi_base - var_spasial + noise, 10, 100),
         'uo': val_uo_base + (var_spasial * 0.01),
@@ -157,7 +161,7 @@ for i in range(len(lat_flat)):
     })
 df_map = pd.DataFrame(records)
 
-# Integrasikan juga perluasan kolom ke dalam DataFrame master untuk kebutuhan grafik runtun waktu (tab 2 & tab 4)
+# Ekstraksi untuk Garis Grafik Deret Waktu
 df["sst"] = 28.5 + (df["uo"] * 5)
 df["ssta"] = df["uo"] * 2
 df["ph"] = 8.12 + (df["vo"] * 0.5)
@@ -180,32 +184,32 @@ if st.session_state.role == "nelayan":
     st.title("🐟 Dashboard Navigasi Nelayan - Perairan Papua")
     st.markdown(f"### 🗺️ Peta Potensi Zona Tangkap Ikan — Mode {mode} ({waktu_label})")
     
-    fig_map = px.scatter_mapbox(
-        df_map, lat="lat", lon="lon", color="Fisheries_Index",
-        color_continuous_scale="Turbo", zoom=4.8, mapbox_style="open-street-map",
-        range_color=[float(df_map["Fisheries_Index"].min()), float(df_map["Fisheries_Index"].max())]
-    )
-    fig_map.update_layout(mapbox=dict(center=dict(lat=-5.5, lon=135.5)), margin={"r":0,"t":40,"l":0,"b":0}, height=520)
-    st.plotly_chart(fig_map, use_container_width=True)
-    
-    st.write("---")
-    st.markdown("### 🚨 Peringatan Pemanduan Lapangan Melaut")
-    mean_fsi = df_map['Fisheries_Index'].mean()
-    
-    if mean_fsi > 73:
-        st.success(f"🟢 **STATUS: SANGAT AMAN & BANYAK IKAN!** (Nilai Potensi: {mean_fsi:.1f}/100)\n\nNutrisi laut melimpah di perairan dalam. Sangat direkomendasikan menurunkan jaring di area berwarna merah/oranye pada peta!")
-    elif mean_fsi > 55:
-        st.info(f"🔵 **STATUS: KONDISI AMAN NORMAL.** (Nilai Potensi: {mean_fsi:.1f}/100)\n\nPergerakan ikan konstan mengikuti arah pergerakan arus permukaan perairan Papua. Operasi nelayan berjalan stabil.")
-    else:
-        st.warning(f"🟡 **STATUS: WASPADA TANGKAPAN RENDAH.** (Nilai Potensi: {mean_fsi:.1f}/100)\n\nSuhu permukaan laut berfluktuasi. Disarankan memancing di sekitar pesisir pantai dekat teluk.")
+    if not df_map.empty:
+        fig_map = px.scatter_mapbox(
+            df_map, lat="lat", lon="lon", color="Fisheries_Index",
+            color_continuous_scale="Turbo", zoom=4.8, mapbox_style="open-street-map",
+            range_color=[float(df_map["Fisheries_Index"].min()), float(df_map["Fisheries_Index"].max())]
+        )
+        fig_map.update_layout(mapbox=dict(center=dict(lat=-5.5, lon=135.5)), margin={"r":0,"t":40,"l":0,"b":0}, height=520)
+        st.plotly_chart(fig_map, use_container_width=True)
+        
+        st.write("---")
+        st.markdown("### 🚨 Peringatan Pemanduan Lapangan Melaut")
+        mean_fsi = df_map['Fisheries_Index'].mean()
+        
+        if mean_fsi > 73:
+            st.success(f"🟢 **STATUS: SANGAT AMAN & BANYAK IKAN!** (Nilai Potensi: {mean_fsi:.1f}/100)\n\nNutrisi laut melimpah di perairan dalam. Sangat direkomendasikan menurunkan jaring di area berwarna merah/oranye pada peta!")
+        elif mean_fsi > 55:
+            st.info(f"🔵 **STATUS: KONDISI AMAN NORMAL.** (Nilai Potensi: {mean_fsi:.1f}/100)\n\nPergerakan ikan konstan mengikuti arah pergerakan arus permukaan perairan Papua. Operasi nelayan berjalan stabil.")
+        else:
+            st.warning(f"🟡 **STATUS: WASPADA TANGKAPAN RENDAH.** (Nilai Potensi: {mean_fsi:.1f}/100)\n\nSuhu permukaan laut berfluktuasi. Disarankan memancing di sekitar pesisir pantai dekat teluk.")
 
 # -----------------------------------------
-# B. LAYOUT KHUSUS AKADEMISI / PENELITI (4 TAB LENGKAP DENGAN MENU MELIMPAH)
+# B. LAYOUT KHUSUS AKADEMISI / PENELITI (4 TAB LENGKAP)
 # -----------------------------------------
 else:
     st.title("🎓 Portal Akademisi & Riset Oseanografi Papua")
     
-    # 🌟 MENU LENGKAP KEMBALI DISEDIAKAN UNTUK AKADEMISI SESUAI REQUEST MUTIA:
     parameter = st.sidebar.selectbox(
         "Pilih Parameter Riset:",
         [
@@ -228,21 +232,22 @@ else:
     tab1, tab2, tab3, tab4 = st.tabs(["🗺️ Spasial Kontur", "📈 Runtun Waktu (Time Series)", "📊 Deskriptif Statistik", "🔥 Korelasi Parameter"])
     
     with tab1:
-        # Menentukan palet warna yang pas secara ilmiah untuk tiap parameter fisik-kimia
-        if parameter == 'Fisheries_Index' or parameter == 'chla': cmap = "Jet"
-        elif parameter == 'Ocean_Health_Index' or parameter == 'do': cmap = "Blues"
-        elif parameter == 'ph': cmap = "Viridis"
-        elif parameter == 'salinitas': cmap = "YlOrRd"
-        else: cmap = "Coolwarm"
-        
-        fig_map = px.scatter_mapbox(
-            df_map, lat="lat", lon="lon", color=parameter,
-            color_continuous_scale=cmap, zoom=4.7, mapbox_style="open-street-map",
-            range_color=[float(df_map[parameter].min()), float(df_map[parameter].max())]
-        )
-        fig_map.update_layout(mapbox=dict(center=dict(lat=-5.5, lon=135.5)), margin={"r":0,"t":40,"l":0,"b":0}, height=480)
-        st.plotly_chart(fig_map, use_container_width=True)
-        
+        if not df_map.empty:
+            if parameter in ['Fisheries_Index', 'chla']: cmap = "Turbo"
+            elif parameter in ['Ocean_Health_Index', 'do']: cmap = "Blues"
+            elif parameter == 'ph': cmap = "Viridis"
+            elif parameter == 'salinitas': cmap = "YlOrBr"
+            elif parameter in ['sst', 'ssta']: cmap = "Thermal"
+            else: cmap = "Icefire"
+            
+            fig_map = px.scatter_mapbox(
+                df_map, lat="lat", lon="lon", color=parameter,
+                color_continuous_scale=cmap, zoom=4.7, mapbox_style="open-street-map",
+                range_color=[float(df_map[parameter].min()), float(df_map[parameter].max())]
+            )
+            fig_map.update_layout(mapbox=dict(center=dict(lat=-5.5, lon=135.5)), margin={"r":0,"t":40,"l":0,"b":0}, height=480)
+            st.plotly_chart(fig_map, use_container_width=True)
+            
     with tab2:
         df_ts_line = df.groupby('time')[parameter].mean().reset_index()
         fig_ts = px.line(df_ts_line, x="time", y=parameter, title=f"Kurva Tren Temporal Jangka Panjang - Parameter {parameter} (2001-2020)")
@@ -255,7 +260,6 @@ else:
         st.dataframe(df_map[[parameter]].describe().T, use_container_width=True)
         
     with tab4:
-        # Menampilkan korelasi dari seluruh matriks parameter yang lengkap
         numeric_df = df.select_dtypes(include=np.number).drop(columns=['year', 'month'], errors='ignore')
-        fig_corr = px.imshow(numeric_df.corr(), text_auto=".2f", color_continuous_scale="Coolwarm", title="Matriks Korelasi Kuantitatif Pearson")
+        fig_corr = px.imshow(numeric_df.corr(), text_auto=".2f", color_continuous_scale="RdBu", title="Matriks Korelasi Kuantitatif Pearson")
         st.plotly_chart(fig_corr, use_container_width=True)
