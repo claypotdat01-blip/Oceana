@@ -36,6 +36,22 @@ except Exception as e:
 df["year"] = df["time"].dt.year
 df["month"] = df["time"].dt.month
 
+# Amankan Struktur Data Utama
+df["Ocean_Health_Index"] = df["Ocean_Health_Index"].astype(float)
+df["Fisheries_Index"] = df["Fisheries_Index"].astype(float)
+
+# Penyalinan parameter lengkap ke dataframe utama jangka panjang agar sinkron
+df["sst"] = 28.5 + (df["uo"] * 5)
+df["ssta"] = df["uo"] * 2
+df["ph"] = 8.12 + (df["vo"] * 0.5)
+df["do"] = 6.2 - (df["uo"] * 2)
+df["salinitas"] = 34.2 + (df["vo"] * 2)
+df["chla"] = 0.22 + (df["uo"] * 0.4)
+df["current_speed"] = np.sqrt(df["uo"]**2 + df["vo"]**2)
+df["gelombang"] = 0.8 + (df["uo"] * 1.2)
+df["angin_u"] = -1.5 + (df["uo"] * 10)
+df["angin_v"] = -0.5 + (df["vo"] * 5)
+
 # =========================================
 # 3. HALAMAN UTAMA / BERANDA (HOME PAGE)
 # =========================================
@@ -107,16 +123,17 @@ else: # Mode Prediksi
     waktu_label = f"Proyeksi {bulan_pred}"
 
 # =========================================
-# 5. GENERASI GRID SPASIAL PAPUA (MASKING DIPERKETAT)
+# 5. GENERASI GRID SPASIAL PAPUA (PERAIRAN UTARA DIKEMBALIKAN)
 # =========================================
-lat_grid = np.linspace(-9.0, -2.0, 16)
-lon_grid = np.linspace(130.0, 141.0, 16)
+# Ditambahkan kerapatan grid (18x18) agar lekukan garis pantai terlihat jauh lebih halus dan padat
+lat_grid = np.linspace(-9.0, -1.5, 18)  
+lon_grid = np.linspace(130.0, 141.0, 18)
 lon_g, lat_g = np.meshgrid(lon_grid, lat_grid)
 
 lat_flat = lat_g.flatten()
 lon_flat = lon_g.flatten()
 
-if (not df_filter_base.empty) and ("Ocean_Health_Index" in df_filter_base.columns):
+if not df_filter_base.empty:
     val_ohi_base = df_filter_base["Ocean_Health_Index"].mean()
     val_fsi_base = df_filter_base["Fisheries_Index"].mean()
     val_uo_base = df_filter_base["uo"].mean()
@@ -130,12 +147,11 @@ for i in range(len(lat_flat)):
     t_lat = lat_flat[i]
     t_lon = lon_flat[i]
     
-    # 🌟 KUNCI FIX KOORDINAT: Batasan poligon land-masking diperketat agar titik daratan hilang total!
-    if t_lon > 134.0 and t_lat > -5.0:  # Memotong pulau utama bagian utara & tengah
+    # 🌟 FORMULA MASKING LINGKUNGAN BARU: Hanya mengunci dataran tengah dan daratan selatan Papua!
+    # Area perairan utara (Jayapura-Sorong) dan teluk Cenderawasih sekarang terbuka penuh!
+    if t_lon > 134.5 and (-5.5 < t_lat < -2.5): # Daratan utama tengah pulau
         continue
-    if t_lon > 136.5 and t_lat > -8.5:  # Memotong Merauke dan Papua Selatan
-        continue
-    if t_lon > 133.2 and t_lat > -3.5:  # Memotong area leher burung pulau barat
+    if t_lon > 136.2 and t_lat <= -5.5: # Daratan Papua Selatan / Merauke
         continue
         
     var_spasial = np.sin(t_lon * 1.5) * 3.0 + np.cos(t_lat * 1.2) * 2.5
@@ -161,18 +177,6 @@ for i in range(len(lat_flat)):
     })
 df_map = pd.DataFrame(records)
 
-# Ekstraksi untuk Garis Grafik Deret Waktu
-df["sst"] = 28.5 + (df["uo"] * 5)
-df["ssta"] = df["uo"] * 2
-df["ph"] = 8.12 + (df["vo"] * 0.5)
-df["do"] = 6.2 - (df["uo"] * 2)
-df["salinitas"] = 34.2 + (df["vo"] * 2)
-df["chla"] = 0.22 + (df["uo"] * 0.4)
-df["current_speed"] = np.sqrt(df["uo"]**2 + df["vo"]**2)
-df["gelombang"] = 0.8 + (df["uo"] * 1.2)
-df["angin_u"] = -1.5 + (df["uo"] * 10)
-df["angin_v"] = -0.5 + (df["vo"] * 5)
-
 # =========================================
 # 6. RENDER KONTEN UTAMA DASHBOARD
 # =========================================
@@ -187,10 +191,10 @@ if st.session_state.role == "nelayan":
     if not df_map.empty:
         fig_map = px.scatter_mapbox(
             df_map, lat="lat", lon="lon", color="Fisheries_Index",
-            color_continuous_scale="Turbo", zoom=4.8, mapbox_style="open-street-map",
+            color_continuous_scale="Turbo", zoom=4.6, mapbox_style="open-street-map",
             range_color=[float(df_map["Fisheries_Index"].min()), float(df_map["Fisheries_Index"].max())]
         )
-        fig_map.update_layout(mapbox=dict(center=dict(lat=-5.5, lon=135.5)), margin={"r":0,"t":40,"l":0,"b":0}, height=520)
+        fig_map.update_layout(mapbox=dict(center=dict(lat=-5.0, lon=135.5)), margin={"r":0,"t":40,"l":0,"b":0}, height=540)
         st.plotly_chart(fig_map, use_container_width=True)
         
         st.write("---")
@@ -242,10 +246,10 @@ else:
             
             fig_map = px.scatter_mapbox(
                 df_map, lat="lat", lon="lon", color=parameter,
-                color_continuous_scale=cmap, zoom=4.7, mapbox_style="open-street-map",
+                color_continuous_scale=cmap, zoom=4.6, mapbox_style="open-street-map",
                 range_color=[float(df_map[parameter].min()), float(df_map[parameter].max())]
             )
-            fig_map.update_layout(mapbox=dict(center=dict(lat=-5.5, lon=135.5)), margin={"r":0,"t":40,"l":0,"b":0}, height=480)
+            fig_map.update_layout(mapbox=dict(center=dict(lat=-5.0, lon=135.5)), margin={"r":0,"t":40,"l":0,"b":0}, height=500)
             st.plotly_chart(fig_map, use_container_width=True)
             
     with tab2:
