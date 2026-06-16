@@ -814,7 +814,17 @@ else:
 
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["  Spasial  ", "  Time Series  ", "  Statistik  ", "  Korelasi  ", "  Rose Diagram  "])
+    # Rose diagram HANYA relevan untuk parameter terarah/vektor: angin & gelombang.
+    # Untuk parameter skalar (SST, pH, salinitas, DO, klorofil, dll.) tab ini tidak ditampilkan.
+    PARAM_TERARAH = ["angin_u", "angin_v", "gelombang"]
+    tampilkan_rose = parameter in PARAM_TERARAH
+
+    if tampilkan_rose:
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(
+            ["  Spasial  ", "  Time Series  ", "  Statistik  ", "  Korelasi  ", "  Rose Diagram  "])
+    else:
+        tab1, tab2, tab3, tab4 = st.tabs(
+            ["  Spasial  ", "  Time Series  ", "  Statistik  ", "  Korelasi  "])
 
     with tab1:
         cmap_dict = {
@@ -908,14 +918,25 @@ else:
         fig_corr.update_traces(textfont=dict(size=9, color="#0D1F33"))
         st.plotly_chart(fig_corr, use_container_width=True)
 
-    with tab5:
-        st.markdown('<div class="section-label">ROSE DIAGRAM — DISTRIBUSI ARAH & INTENSITAS</div>', unsafe_allow_html=True)
-        df_rose_src = df_filter_base if not df_filter_base.empty else df
-        rc1, rc2 = st.columns(2)
-        with rc1:
-            st.plotly_chart(make_wind_rose(df_rose_src, f"Arah & Kecepatan Angin · {waktu_label}"), use_container_width=True)
-        with rc2:
-            st.plotly_chart(make_wave_rose(df_rose_src, f"Arah & Tinggi Gelombang · {waktu_label}"), use_container_width=True)
-        st.markdown("""
-<div class="data-note">Rose diagram dibangun dari komponen angin zonal (U) dan meridional (V) menggunakan konvensi meteorologis (arah dari mana angin datang). Arah gelombang menggunakan proxy arah arus permukaan (uo, vo).</div>
+    # Tab Rose Diagram hanya dibangun bila parameter yang dipilih bersifat terarah,
+    # dan menampilkan rose yang sesuai dengan parameter aktif:
+    #   - angin_u / angin_v  -> wind rose
+    #   - gelombang          -> wave rose
+    if tampilkan_rose:
+        with tab5:
+            st.markdown('<div class="section-label">ROSE DIAGRAM — DISTRIBUSI ARAH & INTENSITAS</div>', unsafe_allow_html=True)
+            df_rose_src = df_filter_base if not df_filter_base.empty else df
+            if parameter in ("angin_u", "angin_v"):
+                st.plotly_chart(
+                    make_wind_rose(df_rose_src, f"Arah & Kecepatan Angin · {waktu_label}"),
+                    use_container_width=True)
+                st.markdown("""
+<div class="data-note">Rose diagram angin dibangun dari komponen zonal (U) dan meridional (V) menggunakan konvensi meteorologis (arah dari mana angin datang).</div>
+""", unsafe_allow_html=True)
+            else:  # gelombang
+                st.plotly_chart(
+                    make_wave_rose(df_rose_src, f"Arah & Tinggi Gelombang · {waktu_label}"),
+                    use_container_width=True)
+                st.markdown("""
+<div class="data-note">Rose diagram gelombang menggunakan tinggi gelombang dengan proxy arah arus permukaan (uo, vo).</div>
 """, unsafe_allow_html=True)
