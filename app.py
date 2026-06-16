@@ -141,11 +141,11 @@ else: # Mode Prediksi
     waktu_label = f"Proyeksi {bulan_pred}"
 
 # =========================================
-# 5. GENERASI GRID SPASIAL (LOGIKA KUNCIAN DARATAN DIHALUSKAN)
+# 5. GENERASI GRID SPASIAL INTERPOLASI LAUT ARAFURA
 # =========================================
-# Menggunakan kerapatan matriks 26x26 agar titik data di selat sempit sekitar pulau Yos Sudarso lolos terbentuk!
-lat_grid = np.linspace(-12.0, -4.0, 26)  
-lon_grid = np.linspace(129.0, 144.0, 26)
+# Naikkan ke grid 30x30 agar hasil interpolasi kontur warnanya super halus dan rapat!
+lat_grid = np.linspace(-12.0, -4.0, 30)  
+lon_grid = np.linspace(129.0, 144.0, 30)
 lon_g, lat_g = np.meshgrid(lon_grid, lat_grid)
 
 lat_flat = lat_g.flatten()
@@ -163,14 +163,10 @@ for i in range(len(lat_flat)):
     t_lat = lat_flat[i]
     t_lon = lon_flat[i]
     
-    # 🌟 PERBAIKAN MASTER MASKING: Celah rawa dan selat sempit bagian tengah dibiarkan terbuka!
-    # Hanya mengunci daratan utama Papua Tengah pegunungan tinggi ke atas, serta daratan inti Merauke kota paling kanan
-    if t_lon > 134.5 and t_lat > -4.8: # Kunci daratan atas pulau utama
-        continue
-    if t_lon > 138.2 and (-7.8 < t_lat <= -5.0): # Hanya mengunci blok daratan rawa timur inti
-        continue
-    if t_lon > 140.8 and t_lat > -8.5: # Bagian daratan timur luar (PNG)
-        continue
+    # Land Masking ketat melindungi pulau Papua dari kebocoran warna kontur
+    if t_lon > 134.5 and t_lat > -4.8: continue
+    if t_lon > 137.4 and t_lat > -8.4: continue
+    if t_lon > 140.5 and t_lat > -9.2: continue
         
     var_spasial = np.sin(t_lon * 1.8) * 2.5 + np.cos(t_lat * 1.4) * 2.0
     
@@ -222,15 +218,17 @@ df_map = pd.DataFrame(records)
 # 6. RENDER KONTEN UTAMA DASHBOARD
 # =========================================
 
-# --- A. LAYOUT NELAYAN ---
+# --- A. LAYOUT NELAYAN (KONTEN HEATMAP HALUS BERWARNA) ---
 if st.session_state.role == "nelayan":
     st.title("🐟 Dashboard Navigasi Nelayan - Perairan Papua")
-    st.markdown(f"### 🗺️ Peta Potensi Zona Tangkap Ikan — Mode {mode} ({waktu_label})")
+    st.markdown(f"### 🗺️ Peta Kontur Potensi Zona Tangkap Ikan — Mode {mode} ({waktu_label})")
     
     if not df_map.empty:
-        fig_map = px.scatter_mapbox(
-            df_map, lat="lat", lon="lon", color="Fisheries_Index",
-            color_continuous_scale="Turbo", zoom=4.8, mapbox_style="open-street-map",
+        # 🌟 LOGIKA UTAMA DIUBAH: Menggunakan density_mapbox agar bintik (dot) berubah jadi interpolasi warna kontinu yang halus!
+        fig_map = px.density_mapbox(
+            df_map, lat="lat", lon="lon", z="Fisheries_Index",
+            radius=22, opacity=0.85, zoom=4.8,
+            color_continuous_scale="Turbo", mapbox_style="open-street-map",
             range_color=[float(df_map["Fisheries_Index"].min()), float(df_map["Fisheries_Index"].max())]
         )
         fig_map.update_layout(mapbox=dict(center=dict(lat=-8.0, lon=136.5)), margin={"r":0,"t":40,"l":0,"b":0}, height=540)
@@ -247,7 +245,7 @@ if st.session_state.role == "nelayan":
         else:
             st.warning(f"🟡 **STATUS: WASPADA TANGKAPAN RENDAH.** (Nilai Potensi: {mean_fsi:.1f}/100)\n\nSuhu permukaan laut berfluktuasi. Disarankan memancing di sekitar pesisir pantai dekat teluk.")
 
-# --- B. LAYOUT AKADEMISI ---
+# --- B. LAYOUT AKADEMISI (KONTEN HEATMAP 12 PARAMETER LENGKAP) ---
 else:
     st.title("🎓 Portal Akademisi & Riset Oseanografi Papua")
     
@@ -281,9 +279,11 @@ else:
             elif parameter in ['sst', 'ssta']: cmap = "Thermal"
             else: cmap = "Icefire"
             
-            fig_map = px.scatter_mapbox(
-                df_map, lat="lat", lon="lon", color=parameter,
-                color_continuous_scale=cmap, zoom=4.7, mapbox_style="open-street-map",
+            # 🌟 INTERPOLASI SPASIAL HALUS: Menggunakan density_mapbox untuk Akademisi
+            fig_map = px.density_mapbox(
+                df_map, lat="lat", lon="lon", z=parameter,
+                radius=22, opacity=0.85, zoom=4.7, mapbox_style="open-street-map",
+                color_continuous_scale=cmap,
                 range_color=[float(df_map[parameter].min()), float(df_map[parameter].max())]
             )
             fig_map.update_layout(mapbox=dict(center=dict(lat=-8.0, lon=136.5)), margin={"r":0,"t":40,"l":0,"b":0}, height=500)
