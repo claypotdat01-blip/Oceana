@@ -141,12 +141,11 @@ else: # Mode Prediksi
     waktu_label = f"Proyeksi {bulan_pred}"
 
 # =========================================
-# 5. GENERASI GRID SPASIAL (SESUAI KOORDINAT KAJIAN MUTIA)
+# 5. GENERASI GRID SPASIAL (LOGIKA KUNCIAN DARATAN DIHALUSKAN)
 # =========================================
-# 🌟 KUNCI BOX KOORDINAT BARU: Lintang (-12.0 s.d -4.0) dan Bujur (129.0 s.d 144.0)
-# Kerapatan grid dinaikkan jadi 24x24 agar coverage area yang luas ini tetap terlihat detail dan padat pelanginya!
-lat_grid = np.linspace(-12.0, -4.0, 24)  
-lon_grid = np.linspace(129.0, 144.0, 24)
+# Menggunakan kerapatan matriks 26x26 agar titik data di selat sempit sekitar pulau Yos Sudarso lolos terbentuk!
+lat_grid = np.linspace(-12.0, -4.0, 26)  
+lon_grid = np.linspace(129.0, 144.0, 26)
 lon_g, lat_g = np.meshgrid(lon_grid, lat_grid)
 
 lat_flat = lat_g.flatten()
@@ -164,12 +163,13 @@ for i in range(len(lat_flat)):
     t_lat = lat_flat[i]
     t_lon = lon_flat[i]
     
-    # 🌟 POLIGON LAND MASKING PRESISI BARU: Mengunci daratan utama Papua bagian tengah-selatan, daratan Merauke, serta pulau timur luar
-    if t_lon > 134.0 and t_lat > -5.0: # Daratan utama pulau tengah
+    # 🌟 PERBAIKAN MASTER MASKING: Celah rawa dan selat sempit bagian tengah dibiarkan terbuka!
+    # Hanya mengunci daratan utama Papua Tengah pegunungan tinggi ke atas, serta daratan inti Merauke kota paling kanan
+    if t_lon > 134.5 and t_lat > -4.8: # Kunci daratan atas pulau utama
         continue
-    if t_lon > 136.5 and (-8.3 < t_lat <= -5.0): # Daratan Merauke / Papua Selatan asli
+    if t_lon > 138.2 and (-7.8 < t_lat <= -5.0): # Hanya mengunci blok daratan rawa timur inti
         continue
-    if t_lon > 140.8 and t_lat > -8.5: # Bagian daratan timur (PNG Barat)
+    if t_lon > 140.8 and t_lat > -8.5: # Bagian daratan timur luar (PNG)
         continue
         
     var_spasial = np.sin(t_lon * 1.8) * 2.5 + np.cos(t_lat * 1.4) * 2.0
@@ -228,7 +228,6 @@ if st.session_state.role == "nelayan":
     st.markdown(f"### 🗺️ Peta Potensi Zona Tangkap Ikan — Mode {mode} ({waktu_label})")
     
     if not df_map.empty:
-        # Menyesuaikan titik tengah kamera otomatis pas di pusat koordinat baru kamu (-8.0 Lat, 136.5 Lon)
         fig_map = px.scatter_mapbox(
             df_map, lat="lat", lon="lon", color="Fisheries_Index",
             color_continuous_scale="Turbo", zoom=4.8, mapbox_style="open-street-map",
