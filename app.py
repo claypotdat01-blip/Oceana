@@ -141,11 +141,12 @@ else: # Mode Prediksi
     waktu_label = f"Proyeksi {bulan_pred}"
 
 # =========================================
-# 5. GENERASI GRID SPASIAL PAPUA (LAUT ARAFURA FULL PENUH)
+# 5. GENERASI GRID SPASIAL (SESUAI KOORDINAT KAJIAN MUTIA)
 # =========================================
-# 🌟 PELEBARAN GEOGRAFIS: Lintang (-9.0 s.d -4.5) dan Bujur dilebarkan ke kiri (131.0 s.d 141.0) dengan grid 22x22 agar bolongnya tertutup padat!
-lat_grid = np.linspace(-9.0, -4.5, 22)  
-lon_grid = np.linspace(131.0, 141.0, 22)
+# 🌟 KUNCI BOX KOORDINAT BARU: Lintang (-12.0 s.d -4.0) dan Bujur (129.0 s.d 144.0)
+# Kerapatan grid dinaikkan jadi 24x24 agar coverage area yang luas ini tetap terlihat detail dan padat pelanginya!
+lat_grid = np.linspace(-12.0, -4.0, 24)  
+lon_grid = np.linspace(129.0, 144.0, 24)
 lon_g, lat_g = np.meshgrid(lon_grid, lat_grid)
 
 lat_flat = lat_g.flatten()
@@ -163,13 +164,15 @@ for i in range(len(lat_flat)):
     t_lat = lat_flat[i]
     t_lon = lon_flat[i]
     
-    # 🌟 POLIGON MASKING TOTAL: Mengunci daratan utama bagian tengah ke atas dan daratan Merauke timur secara presisi
-    if t_lon > 135.5 and t_lat > -4.0: # Daratan utama pulau tengah
+    # 🌟 POLIGON LAND MASKING PRESISI BARU: Mengunci daratan utama Papua bagian tengah-selatan, daratan Merauke, serta pulau timur luar
+    if t_lon > 134.0 and t_lat > -5.0: # Daratan utama pulau tengah
         continue
-    if t_lon > 137.2 and t_lat <= -4.0: # Daratan Merauke / Papua Selatan asli
+    if t_lon > 136.5 and (-8.3 < t_lat <= -5.0): # Daratan Merauke / Papua Selatan asli
+        continue
+    if t_lon > 140.8 and t_lat > -8.5: # Bagian daratan timur (PNG Barat)
         continue
         
-    var_spasial = np.sin(t_lon * 2.0) * 2.5 + np.cos(t_lat * 1.5) * 2.0
+    var_spasial = np.sin(t_lon * 1.8) * 2.5 + np.cos(t_lat * 1.4) * 2.0
     
     grid_uo = val_uo_base + (var_spasial * 0.01)
     grid_vo = val_vo_base + (var_spasial * 0.005)
@@ -225,12 +228,13 @@ if st.session_state.role == "nelayan":
     st.markdown(f"### 🗺️ Peta Potensi Zona Tangkap Ikan — Mode {mode} ({waktu_label})")
     
     if not df_map.empty:
+        # Menyesuaikan titik tengah kamera otomatis pas di pusat koordinat baru kamu (-8.0 Lat, 136.5 Lon)
         fig_map = px.scatter_mapbox(
             df_map, lat="lat", lon="lon", color="Fisheries_Index",
-            color_continuous_scale="Turbo", zoom=5.4, mapbox_style="open-street-map",
+            color_continuous_scale="Turbo", zoom=4.8, mapbox_style="open-street-map",
             range_color=[float(df_map["Fisheries_Index"].min()), float(df_map["Fisheries_Index"].max())]
         )
-        fig_map.update_layout(mapbox=dict(center=dict(lat=-7.0, lon=136.2)), margin={"r":0,"t":40,"l":0,"b":0}, height=540)
+        fig_map.update_layout(mapbox=dict(center=dict(lat=-8.0, lon=136.5)), margin={"r":0,"t":40,"l":0,"b":0}, height=540)
         st.plotly_chart(fig_map, use_container_width=True)
         
         st.write("---")
@@ -280,10 +284,10 @@ else:
             
             fig_map = px.scatter_mapbox(
                 df_map, lat="lat", lon="lon", color=parameter,
-                color_continuous_scale=cmap, zoom=5.3, mapbox_style="open-street-map",
+                color_continuous_scale=cmap, zoom=4.7, mapbox_style="open-street-map",
                 range_color=[float(df_map[parameter].min()), float(df_map[parameter].max())]
             )
-            fig_map.update_layout(mapbox=dict(center=dict(lat=-7.0, lon=136.2)), margin={"r":0,"t":40,"l":0,"b":0}, height=500)
+            fig_map.update_layout(mapbox=dict(center=dict(lat=-8.0, lon=136.5)), margin={"r":0,"t":40,"l":0,"b":0}, height=500)
             st.plotly_chart(fig_map, use_container_width=True)
             
     with tab2:
