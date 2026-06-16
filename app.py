@@ -5,7 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 st.set_page_config(
-    page_title="LAUTAN — Ocean Intelligence Platform",
+    page_title="OCEANA — Ocean Intelligence Platform",
     layout="wide",
     initial_sidebar_state="expanded"
 )
