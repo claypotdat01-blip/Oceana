@@ -36,21 +36,39 @@ except Exception as e:
 df["year"] = df["time"].dt.year
 df["month"] = df["time"].dt.month
 
-# Amankan Struktur Data Utama
-df["Ocean_Health_Index"] = df["Ocean_Health_Index"].astype(float)
-df["Fisheries_Index"] = df["Fisheries_Index"].astype(float)
-
-# Penyalinan parameter lengkap ke dataframe utama jangka panjang agar sinkron
-df["sst"] = 28.5 + (df["uo"] * 5)
-df["ssta"] = df["uo"] * 2
-df["ph"] = 8.12 + (df["vo"] * 0.5)
-df["do"] = 6.2 - (df["uo"] * 2)
-df["salinitas"] = 34.2 + (df["vo"] * 2)
-df["chla"] = 0.22 + (df["uo"] * 0.4)
+# 🌟 FIX KUNCI: Membuat fallback parameter kelautan secara global jika kolom tidak langsung ditemukan di CSV
+if "uo" not in df.columns: df["uo"] = -0.05
+if "vo" not in df.columns: df["vo"] = -0.01
+if "sst" not in df.columns: df["sst"] = 28.5 + (df["uo"] * 5)
+if "ssta" not in df.columns: df["ssta"] = df["uo"] * 2
+if "ph" not in df.columns: df["ph"] = 8.12 + (df["vo"] * 0.5)
+if "do" not in df.columns: df["do"] = 6.2 - (df["uo"] * 2)
+if "salinitas" not in df.columns: df["salinitas"] = 34.2 + (df["vo"] * 2)
+if "chla" not in df.columns: df["chla"] = 0.22 + (df["uo"] * 0.4)
 df["current_speed"] = np.sqrt(df["uo"]**2 + df["vo"]**2)
-df["gelombang"] = 0.8 + (df["uo"] * 1.2)
-df["angin_u"] = -1.5 + (df["uo"] * 10)
-df["angin_v"] = -0.5 + (df["vo"] * 5)
+if "gelombang" not in df.columns: df["gelombang"] = 0.8 + (df["uo"] * 1.2)
+if "angin_u" not in df.columns: df["angin_u"] = -1.5 + (df["uo"] * 10)
+if "angin_v" not in df.columns: df["angin_v"] = -0.5 + (df["vo"] * 5)
+
+def normalize_global(series, vmin, vmax):
+    if (vmax - vmin) == 0: return series * 0
+    return (series - vmin) / (vmax - vmin)
+
+# Kalkulasi Indeks Rerata Jangka Panjang di dalam memori aplikasi
+df["Ocean_Health_Index"] = (
+    0.25 * normalize_global(df["do"], 5.0, 7.0) +
+    0.20 * normalize_global(df["ph"], 8.0, 8.3) +
+    0.20 * normalize_global(df["chla"], 0.1, 0.4) +
+    0.15 * normalize_global(df["salinitas"], 33.5, 35.0) +
+    0.20 * (1 - normalize_global(df["gelombang"], 0.4, 1.5))
+) * 100
+
+df["Fisheries_Index"] = (
+    0.35 * normalize_global(df["chla"], 0.1, 0.4) +
+    0.25 * normalize_global(df["do"], 5.0, 7.0) +
+    0.20 * normalize_global(df["current_speed"], 0.0, 0.2) +
+    0.20 * (1 - normalize_global(df["gelombang"], 0.4, 1.5))
+) * 100
 
 # =========================================
 # 3. HALAMAN UTAMA / BERANDA (HOME PAGE)
@@ -123,9 +141,8 @@ else: # Mode Prediksi
     waktu_label = f"Proyeksi {bulan_pred}"
 
 # =========================================
-# 5. GENERASI GRID SPASIAL PAPUA (PERAIRAN UTARA DIKEMBALIKAN)
+# 5. GENERASI GRID SPASIAL PAPUA (PERAIRAN MASIH PADAT)
 # =========================================
-# Ditambahkan kerapatan grid (18x18) agar lekukan garis pantai terlihat jauh lebih halus dan padat
 lat_grid = np.linspace(-9.0, -1.5, 18)  
 lon_grid = np.linspace(130.0, 141.0, 18)
 lon_g, lat_g = np.meshgrid(lon_grid, lat_grid)
@@ -134,12 +151,10 @@ lat_flat = lat_g.flatten()
 lon_flat = lon_g.flatten()
 
 if not df_filter_base.empty:
-    val_ohi_base = df_filter_base["Ocean_Health_Index"].mean()
-    val_fsi_base = df_filter_base["Fisheries_Index"].mean()
     val_uo_base = df_filter_base["uo"].mean()
     val_vo_base = df_filter_base["vo"].mean()
 else:
-    val_ohi_base, val_fsi_base, val_uo_base, val_vo_base = 78.5, 72.0, -0.05, -0.01
+    val_uo_base, val_vo_base = -0.05, -0.01
 
 records = []
 np.random.seed(42)
@@ -147,31 +162,53 @@ for i in range(len(lat_flat)):
     t_lat = lat_flat[i]
     t_lon = lon_flat[i]
     
-    # 🌟 FORMULA MASKING LINGKUNGAN BARU: Hanya mengunci dataran tengah dan daratan selatan Papua!
-    # Area perairan utara (Jayapura-Sorong) dan teluk Cenderawasih sekarang terbuka penuh!
-    if t_lon > 134.5 and (-5.5 < t_lat < -2.5): # Daratan utama tengah pulau
-        continue
-    if t_lon > 136.2 and t_lat <= -5.5: # Daratan Papua Selatan / Merauke
-        continue
+    # Land masking mengunci area daratan tengah dan selatan Papua
+    if t_lon > 134.5 and (-5.5 < t_lat < -2.5): continue
+    if t_lon > 136.2 and t_lat <= -5.5: continue
         
     var_spasial = np.sin(t_lon * 1.5) * 3.0 + np.cos(t_lat * 1.2) * 2.5
     noise = np.random.normal(0, 0.4)
     
+    # Hitung data grid spasial untuk disuplai ke peta kontur
+    grid_uo = val_uo_base + (var_spasial * 0.01)
+    grid_vo = val_vo_base + (var_spasial * 0.005)
+    grid_speed = np.sqrt(grid_uo**2 + grid_vo**2)
+    grid_do = 6.2 - (var_spasial * 0.05) + np.random.normal(0, 0.03)
+    grid_ph = 8.12 + (var_spasial * 0.004) + np.random.normal(0, 0.002)
+    grid_chla = 0.22 + (var_spasial * 0.01) + np.random.normal(0, 0.01)
+    grid_sal = 34.2 + (var_spasial * 0.03) + np.random.normal(0, 0.02)
+    grid_wave = 0.8 + (var_spasial * 0.04) + np.random.normal(0, 0.02)
+    
+    grid_sohi = (
+        0.25 * normalisasi_global(grid_do, 5.0, 7.0) +
+        0.20 * normalisasi_global(grid_ph, 8.0, 8.3) +
+        0.20 * normalisasi_global(grid_chla, 0.1, 0.4) +
+        0.15 * normalisasi_global(grid_sal, 33.5, 35.0) +
+        0.20 * (1 - normalisasi_global(grid_wave, 0.4, 1.5))
+    ) * 100
+
+    grid_fsi = (
+        0.35 * normalisasi_global(grid_chla, 0.1, 0.4) +
+        0.25 * normalisasi_global(grid_do, 5.0, 7.0) +
+        0.20 * normalisasi_global(grid_speed, 0.0, 0.2) +
+        0.20 * (1 - normalisasi_global(grid_wave, 0.4, 1.5))
+    ) * 100
+
     records.append({
         'lat': t_lat,
         'lon': t_lon,
-        'Ocean_Health_Index': np.clip(val_ohi_base + var_spasial + noise, 10, 100),
-        'Fisheries_Index': np.clip(val_fsi_base - var_spasial + noise, 10, 100),
-        'uo': val_uo_base + (var_spasial * 0.01),
-        'vo': val_vo_base + (var_spasial * 0.005),
+        'Ocean_Health_Index': np.clip(grid_sohi, 10, 100),
+        'Fisheries_Index': np.clip(grid_fsi, 10, 100),
+        'uo': grid_uo,
+        'vo': grid_vo,
         'sst': 28.5 + (var_spasial * 0.15) + np.random.normal(0, 0.1),
         'ssta': (var_spasial * 0.05) + np.random.normal(0, 0.05),
-        'ph': 8.12 + (var_spasial * 0.004) + np.random.normal(0, 0.002),
-        'do': 6.2 - (var_spasial * 0.05) + np.random.normal(0, 0.03),
-        'salinitas': 34.2 + (var_spasial * 0.03) + np.random.normal(0, 0.02),
-        'chla': 0.22 + (var_spasial * 0.01) + np.random.normal(0, 0.01),
-        'current_speed': np.sqrt((val_uo_base + var_spasial*0.01)**2 + (val_vo_base + var_spasial*0.005)**2),
-        'gelombang': 0.8 + (var_spasial * 0.04) + np.random.normal(0, 0.02),
+        'ph': grid_ph,
+        'do': grid_do,
+        'salinitas': grid_sal,
+        'chla': grid_chla,
+        'current_speed': grid_speed,
+        'gelombang': grid_wave,
         'angin_u': -1.5 + (var_spasial * 0.2),
         'angin_v': -0.5 + (var_spasial * 0.1)
     })
@@ -182,7 +219,7 @@ df_map = pd.DataFrame(records)
 # =========================================
 
 # -----------------------------------------
-# A. LAYOUT KHUSUS NELAYAN (PETA + WARNING)
+# A. LAYOUT KHUSUS NELAYAN (HANYA PETA + WARNING)
 # -----------------------------------------
 if st.session_state.role == "nelayan":
     st.title("🐟 Dashboard Navigasi Nelayan - Perairan Papua")
