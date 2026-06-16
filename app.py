@@ -895,20 +895,29 @@ else:
         p_fn = np.poly1d(z)
         y_trend = p_fn(range(len(df_ts)))
 
-        # Range sumbu-Y mengikuti sebaran NYATA tiap parameter (tidak dipaksa dari 0),
-        # supaya variasi pada pH, salinitas, SST, dll. tetap terlihat jelas.
+        # Range sumbu-Y mengikuti sebaran NYATA seluruh data parameter ini
+        # (gabungan garis data + tren), TIDAK dipaksa mulai dari 0.
         y_lo = float(min(y_vals.min(), y_trend.min()))
         y_hi = float(max(y_vals.max(), y_trend.max()))
         span = y_hi - y_lo
         pad = span * 0.08 if span > 0 else (abs(y_hi) * 0.08 if y_hi != 0 else 1.0)
+        y_floor, y_ceil = y_lo - pad, y_hi + pad
 
         fig_ts = go.Figure()
+        # Baseline TAK TERLIHAT di dasar sumbu sebagai acuan arsiran (BUKAN nol).
+        # Ini mencegah plotly.js menarik sumbu kembali ke 0 seperti pada "fill=tozeroy".
+        fig_ts.add_trace(go.Scatter(
+            x=df_ts["time"], y=np.full(len(df_ts), y_floor),
+            mode="lines", line=dict(width=0), hoverinfo="skip", showlegend=False
+        ))
+        # Garis data, diarsir TURUN ke baseline (tonexty = ke trace tepat sebelumnya).
         fig_ts.add_trace(go.Scatter(
             x=df_ts["time"], y=y_vals,
             mode="lines", name=PARAM_LABELS_CLEAN.get(parameter, parameter),
             line=dict(color="#1E6BB8", width=1.8),
-            fill="tozeroy", fillcolor="rgba(30,107,184,0.07)"
+            fill="tonexty", fillcolor="rgba(30,107,184,0.10)"
         ))
+        # Garis tren linear.
         fig_ts.add_trace(go.Scatter(
             x=df_ts["time"], y=y_trend,
             mode="lines", name="Tren Linear",
@@ -921,8 +930,8 @@ else:
                         bordercolor="#D6E4F0", borderwidth=1),
             height=400,
         )
-        # Diterapkan setelah layout agar tidak bentrok dengan yaxis di PLOTLY_LAYOUT.
-        fig_ts.update_yaxes(range=[y_lo - pad, y_hi + pad])
+        # Range eksplisit + autorange dimatikan -> sumbu terkunci pada sebaran data.
+        fig_ts.update_yaxes(range=[y_floor, y_ceil], autorange=False)
         st.plotly_chart(fig_ts, use_container_width=True)
 
     with tab3:
