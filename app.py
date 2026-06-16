@@ -22,7 +22,7 @@ if "role" not in st.session_state:
     st.session_state.role = "akademisi"
 
 # =========================================
-# 2. LOAD DATA HISTORIS ASLI & AMANKAN KOLOM
+# 2. LOAD DATA HISTORIS
 # =========================================
 @st.cache_data
 def load_data():
@@ -31,9 +31,9 @@ def load_data():
     except:
         dates_fallback = pd.date_range(start="2001-01-01", end="2020-12-01", freq="MS")
         df_data = pd.DataFrame({"time": dates_fallback})
-        
+
     df_data["time"] = pd.to_datetime(df_data["time"])
-    
+
     if "uo" not in df_data.columns: df_data["uo"] = -0.05
     if "vo" not in df_data.columns: df_data["vo"] = -0.01
     if "sst" not in df_data.columns: df_data["sst"] = 28.5 + (df_data["uo"] * 5)
@@ -45,17 +45,15 @@ def load_data():
     if "gelombang" not in df_data.columns: df_data["gelombang"] = 0.8 + (df_data["uo"] * 1.2)
     if "angin_u" not in df_data.columns: df_data["angin_u"] = -1.5 + (df_data["uo"] * 10)
     if "angin_v" not in df_data.columns: df_data["angin_v"] = -0.5 + (df_data["vo"] * 5)
-    
+
     return df_data
 
 df = load_data()
 
-# Ekstraksi Kalender Temporal
 df["year"] = df["time"].dt.year
 df["month"] = df["time"].dt.month
 df["current_speed"] = np.sqrt(df["uo"]**2 + df["vo"]**2)
 
-# Kalkulasi Indeks Rerata Jangka Panjang
 df["Ocean_Health_Index"] = (
     0.25 * normalisasi_global(df["do"], 5.0, 7.0) +
     0.20 * normalisasi_global(df["ph"], 8.0, 8.3) +
@@ -72,7 +70,7 @@ df["Fisheries_Index"] = (
 ) * 100
 
 # =========================================
-# 3. HALAMAN UTAMA / BERANDA (HOME PAGE)
+# 3. HOME PAGE
 # =========================================
 if st.session_state.page == "home":
     st.markdown("<h1 style='text-align: center; color: #0A3641;'>🌊 Platform Informasi & Prediksi Klimatologi Oseanografi</h1>", unsafe_allow_html=True)
@@ -95,7 +93,7 @@ if st.session_state.page == "home":
     st.stop()
 
 # =========================================
-# 4. SIDEBAR - DROPDOWN MODE DATA & KALENDER
+# 4. SIDEBAR
 # =========================================
 st.sidebar.title("⚙️ Navigasi & Filter")
 if st.sidebar.button("✨ Kembali ke Beranda (Home)", use_container_width=True):
@@ -104,153 +102,141 @@ if st.sidebar.button("✨ Kembali ke Beranda (Home)", use_container_width=True):
 
 st.sidebar.write("---")
 
-mode = st.sidebar.selectbox(
-    "Pilih Mode Data:",
-    ["Historis", "Real Time", "Prediksi"]
-)
-
+mode = st.sidebar.selectbox("Pilih Mode Data:", ["Historis", "Real Time", "Prediksi"])
 st.sidebar.write("---")
 
 if mode == "Historis":
     tahun = st.sidebar.selectbox("Pilih Tahun:", sorted(df["year"].unique(), reverse=True))
     breakdown = st.sidebar.radio("Breakdown Berdasarkan:", ["Bulanan", "Musiman"])
-    
-    musim = {"Musim Barat":[12, 1, 2], "Peralihan I":[3, 4, 5], "Musim Timur":[6, 7, 8], "Peralihan II":[9, 10, 11]}
+    musim = {"Musim Barat":[12,1,2], "Peralihan I":[3,4,5], "Musim Timur":[6,7,8], "Peralihan II":[9,10,11]}
     df_filter_base = df[df["year"] == tahun].copy()
-
     if breakdown == "Bulanan":
-        bulan = st.sidebar.selectbox("Pilih Bulan:", ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"])
-        idx_bulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"].index(bulan) + 1
+        bulan = st.sidebar.selectbox("Pilih Bulan:", ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"])
+        idx_bulan = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"].index(bulan) + 1
         df_filter_base = df_filter_base[df_filter_base["month"] == idx_bulan]
         waktu_label = f"{bulan} {tahun}"
     else:
         musim_pilih = st.sidebar.selectbox("Pilih Musim:", list(musim.keys()))
         df_filter_base = df_filter_base[df_filter_base["month"].isin(musim[musim_pilih])]
         waktu_label = f"{musim_pilih} {tahun}"
-
 elif mode == "Real Time":
     st.sidebar.info("📅 Mode Satelit: Menampilkan estimasi operasional Juni 2026.")
     df_filter_base = df[(df["year"] == 2020) & (df["month"] == 6)].copy()
     waktu_label = "Juni 2026 (Real-Time)"
-
-else: # Mode Prediksi
+else:
     st.sidebar.warning("🔮 Mode Proyeksi: Menggunakan Algoritma Proyeksi Iklim Semester-II.")
-    bulan_pred = st.sidebar.selectbox("Pilih Target Bulan Prediksi:", ["Juli 2026", "Agustus 2026", "September 2026", "Desember 2026"])
+    bulan_pred = st.sidebar.selectbox("Pilih Target Bulan Prediksi:", ["Juli 2026","Agustus 2026","September 2026","Desember 2026"])
     idx_p = 7 if "Juli" in bulan_pred else 8 if "Agustus" in bulan_pred else 9 if "September" in bulan_pred else 12
     df_filter_base = df[(df["year"] == 2020) & (df["month"] == idx_p)].copy()
     waktu_label = f"Proyeksi {bulan_pred}"
 
 # =========================================
-# 5. GENERASI GRID SPASIAL INTERPOLASI LAUT ARAFURA
+# 5. SPATIAL GRID — FIXED (no striping)
 # =========================================
-# Grid 60x60 + spatial noise smooth agar density_mapbox tidak striping
-lat_grid = np.linspace(-12.0, -4.0, 60)
-lon_grid = np.linspace(129.0, 144.0, 60)
-lon_g, lat_g = np.meshgrid(lon_grid, lat_grid)
+@st.cache_data
+def build_spatial_grid(val_uo_base, val_vo_base):
+    """
+    Grid 80x80 dengan smooth multi-frequency spatial field.
+    Kunci anti-stripe: kombinasi gelombang frekuensi rendah di KEDUA sumbu lat & lon,
+    sehingga tidak ada satu frekuensi dominan yang bikin pola vertikal/horizontal.
+    """
+    lat_grid = np.linspace(-12.0, -4.0, 80)
+    lon_grid = np.linspace(129.0, 144.0, 80)
+    lon_g, lat_g = np.meshgrid(lon_grid, lat_grid)
+    lat_flat = lat_g.flatten()
+    lon_flat = lon_g.flatten()
 
-lat_flat = lat_g.flatten()
-lon_flat = lon_g.flatten()
+    rng = np.random.default_rng(42)
 
-if not df_filter_base.empty:
-    val_uo_base = df_filter_base["uo"].mean()
-    val_vo_base = df_filter_base["vo"].mean()
-else:
-    val_uo_base, val_vo_base = -0.05, -0.01
-
-# Bikin smooth spatial field pakai kombinasi frekuensi rendah
-# sehingga tidak ada pola stripe vertikal/horizontal
-rng = np.random.default_rng(42)
-
-def smooth_spatial_field(lat_arr, lon_arr):
-    """Gabungan beberapa gelombang sinusoidal frekuensi rendah = smooth, tidak striping"""
-    field = (
-        2.0 * np.sin(lon_arr * 0.35 + lat_arr * 0.20) +
-        1.5 * np.cos(lon_arr * 0.18 - lat_arr * 0.30) +
-        1.0 * np.sin(lon_arr * 0.55 + lat_arr * 0.45) +
-        0.8 * np.cos(lon_arr * 0.28 + lat_arr * 0.12)
+    # Smooth field: frekuensi rendah, campuran lat & lon di setiap term
+    var_spasial_all = (
+        2.5 * np.sin(lon_flat * 0.22 + lat_flat * 0.31) +
+        2.0 * np.cos(lon_flat * 0.15 - lat_flat * 0.28) +
+        1.5 * np.sin(lon_flat * 0.40 + lat_flat * 0.18) +
+        1.0 * np.cos(lon_flat * 0.12 + lat_flat * 0.42) +
+        0.8 * np.sin(lon_flat * 0.33 - lat_flat * 0.22)
     )
-    return field
 
-records = []
-for i in range(len(lat_flat)):
-    t_lat = lat_flat[i]
-    t_lon = lon_flat[i]
+    records = []
+    for i in range(len(lat_flat)):
+        t_lat = lat_flat[i]
+        t_lon = lon_flat[i]
 
-    # Land Masking Papua — lebih smooth dengan toleransi bertahap
-    if t_lon > 134.5 and t_lat > -4.8: continue
-    if t_lon > 137.4 and t_lat > -7.8: continue
-    if t_lon > 140.5 and t_lat > -8.8: continue
-    if t_lon > 143.0 and t_lat > -9.5: continue
+        # Land masking Papua
+        if t_lon > 134.5 and t_lat > -4.8: continue
+        if t_lon > 137.4 and t_lat > -7.8: continue
+        if t_lon > 140.5 and t_lat > -8.8: continue
+        if t_lon > 143.0 and t_lat > -9.5: continue
 
-    var_spasial = smooth_spatial_field(t_lat, t_lon)
+        vs = var_spasial_all[i]
 
-    grid_uo = val_uo_base + (var_spasial * 0.01)
-    grid_vo = val_vo_base + (var_spasial * 0.005)
-    grid_speed = np.sqrt(grid_uo**2 + grid_vo**2)
-    grid_do = 6.2 - (var_spasial * 0.05) + rng.normal(0, 0.02)
-    grid_ph = 8.12 + (var_spasial * 0.004) + rng.normal(0, 0.001)
-    grid_chla = 0.22 + (var_spasial * 0.01) + rng.normal(0, 0.008)
-    grid_sal = 34.2 + (var_spasial * 0.03) + rng.normal(0, 0.015)
-    grid_wave = 0.8 + (var_spasial * 0.04) + rng.normal(0, 0.015)
+        grid_uo = val_uo_base + (vs * 0.01)
+        grid_vo = val_vo_base + (vs * 0.005)
+        grid_speed = np.sqrt(grid_uo**2 + grid_vo**2)
+        grid_do   = 6.2  - (vs * 0.05)  + rng.normal(0, 0.015)
+        grid_ph   = 8.12 + (vs * 0.004) + rng.normal(0, 0.001)
+        grid_chla = 0.22 + (vs * 0.010) + rng.normal(0, 0.006)
+        grid_sal  = 34.2 + (vs * 0.03)  + rng.normal(0, 0.012)
+        grid_wave = 0.8  + (vs * 0.04)  + rng.normal(0, 0.012)
 
-    grid_sohi = (
-        0.25 * normalisasi_global(grid_do, 5.0, 7.0) +
-        0.20 * normalisasi_global(grid_ph, 8.0, 8.3) +
-        0.20 * normalisasi_global(grid_chla, 0.1, 0.4) +
-        0.15 * normalisasi_global(grid_sal, 33.5, 35.0) +
-        0.20 * (1 - normalisasi_global(grid_wave, 0.4, 1.5))
-    ) * 100
+        grid_sohi = (
+            0.25 * normalisasi_global(grid_do,   5.0, 7.0) +
+            0.20 * normalisasi_global(grid_ph,   8.0, 8.3) +
+            0.20 * normalisasi_global(grid_chla, 0.1, 0.4) +
+            0.15 * normalisasi_global(grid_sal,  33.5, 35.0) +
+            0.20 * (1 - normalisasi_global(grid_wave, 0.4, 1.5))
+        ) * 100
 
-    grid_fsi = (
-        0.35 * normalisasi_global(grid_chla, 0.1, 0.4) +
-        0.25 * normalisasi_global(grid_do, 5.0, 7.0) +
-        0.20 * normalisasi_global(grid_speed, 0.0, 0.2) +
-        0.20 * (1 - normalisasi_global(grid_wave, 0.4, 1.5))
-    ) * 100
+        grid_fsi = (
+            0.35 * normalisasi_global(grid_chla,  0.1, 0.4) +
+            0.25 * normalisasi_global(grid_do,    5.0, 7.0) +
+            0.20 * normalisasi_global(grid_speed, 0.0, 0.2) +
+            0.20 * (1 - normalisasi_global(grid_wave, 0.4, 1.5))
+        ) * 100
 
-    records.append({
-        'lat': t_lat,
-        'lon': t_lon,
-        'Ocean_Health_Index': np.clip(grid_sohi, 10, 100),
-        'Fisheries_Index': np.clip(grid_fsi, 10, 100),
-        'uo': grid_uo,
-        'vo': grid_vo,
-        'sst': 28.5 + (var_spasial * 0.15) + rng.normal(0, 0.08),
-        'ssta': (var_spasial * 0.05) + rng.normal(0, 0.04),
-        'ph': grid_ph,
-        'do': grid_do,
-        'salinitas': grid_sal,
-        'chla': grid_chla,
-        'current_speed': grid_speed,
-        'gelombang': grid_wave,
-        'angin_u': -1.5 + (var_spasial * 0.2),
-        'angin_v': -0.5 + (var_spasial * 0.1)
-    })
-df_map = pd.DataFrame(records)
+        records.append({
+            'lat': t_lat, 'lon': t_lon,
+            'Ocean_Health_Index': np.clip(grid_sohi, 10, 100),
+            'Fisheries_Index':    np.clip(grid_fsi,  10, 100),
+            'uo': grid_uo, 'vo': grid_vo,
+            'sst':          28.5 + (vs * 0.15) + rng.normal(0, 0.06),
+            'ssta':                (vs * 0.05)  + rng.normal(0, 0.03),
+            'ph': grid_ph, 'do': grid_do,
+            'salinitas': grid_sal, 'chla': grid_chla,
+            'current_speed': grid_speed, 'gelombang': grid_wave,
+            'angin_u': -1.5 + (vs * 0.2),
+            'angin_v': -0.5 + (vs * 0.1),
+        })
+
+    return pd.DataFrame(records)
+
+
+val_uo_base = df_filter_base["uo"].mean() if not df_filter_base.empty else -0.05
+val_vo_base = df_filter_base["vo"].mean() if not df_filter_base.empty else -0.01
+df_map = build_spatial_grid(round(float(val_uo_base), 4), round(float(val_vo_base), 4))
+
 
 # =========================================
-# FUNGSI HELPER RENDER PETA (shared nelayan & akademisi)
+# HELPER: render peta smooth
 # =========================================
-def render_density_map(df_map, z_col, colorscale, zoom=4.8, center_lat=-8.0, center_lon=136.5, height=540):
-    """
-    Render density map yang smooth tanpa striping.
-    Kunci: radius disesuaikan dengan densitas grid agar overlap antar titik merata.
-    """
-    # Hitung radius optimal berdasarkan spacing grid
-    # Grid 60x60 → spacing ~0.25 deg ≈ 28km. Radius dalam px di zoom ~5 ≈ 25-30px
+def render_map(df_map, z_col, colorscale, height=540):
     fig = px.density_mapbox(
         df_map, lat="lat", lon="lon", z=z_col,
-        radius=28,          # <-- naik dari 22 ke 28 agar tidak ada gap antar titik
-        opacity=0.82,
-        zoom=zoom,
+        # radius dalam pixel — untuk grid 80x80 di zoom ~4.8, radius 35 mengisi gap antar titik
+        radius=35,
+        opacity=0.80,
+        zoom=4.8,
         color_continuous_scale=colorscale,
         mapbox_style="open-street-map",
-        range_color=[float(df_map[z_col].quantile(0.02)),   # clip outlier bawah 2%
-                     float(df_map[z_col].quantile(0.98))]   # clip outlier atas 2%
+        # Pakai quantile bukan min/max agar outlier tidak mencuri range warna
+        range_color=[
+            float(df_map[z_col].quantile(0.03)),
+            float(df_map[z_col].quantile(0.97))
+        ]
     )
     fig.update_layout(
-        mapbox=dict(center=dict(lat=center_lat, lon=center_lon)),
-        margin={"r": 0, "t": 40, "l": 0, "b": 0},
+        mapbox=dict(center=dict(lat=-8.0, lon=136.5)),
+        margin={"r":0,"t":40,"l":0,"b":0},
         height=height,
         coloraxis_colorbar=dict(thickness=14, len=0.7)
     )
@@ -258,17 +244,16 @@ def render_density_map(df_map, z_col, colorscale, zoom=4.8, center_lat=-8.0, cen
 
 
 # =========================================
-# 6. RENDER KONTEN UTAMA DASHBOARD
+# 6. RENDER DASHBOARD
 # =========================================
 
-# --- A. LAYOUT NELAYAN ---
+# --- A. NELAYAN ---
 if st.session_state.role == "nelayan":
     st.title("🐟 Dashboard Navigasi Nelayan - Perairan Papua")
     st.markdown(f"### 🗺️ Peta Kontur Potensi Zona Tangkap Ikan — Mode {mode} ({waktu_label})")
 
     if not df_map.empty:
-        fig_map = render_density_map(df_map, "Fisheries_Index", "Turbo")
-        st.plotly_chart(fig_map, use_container_width=True)
+        st.plotly_chart(render_map(df_map, "Fisheries_Index", "Turbo"), use_container_width=True)
 
         st.write("---")
         st.markdown("### 🚨 Peringatan Pemanduan Lapangan Melaut")
@@ -281,146 +266,54 @@ if st.session_state.role == "nelayan":
         else:
             st.warning(f"🟡 **STATUS: WASPADA TANGKAPAN RENDAH.** (Nilai Potensi: {mean_fsi:.1f}/100)\n\nSuhu permukaan laut berfluktuasi. Disarankan memancing di sekitar pesisir pantai dekat teluk.")
 
-# --- B. LAYOUT AKADEMISI ---
+# --- B. AKADEMISI ---
 else:
     st.title("🎓 Portal Akademisi & Riset Oseanografi Papua")
 
     parameter = st.sidebar.selectbox(
         "Pilih Parameter Riset:",
-        [
-            "Ocean_Health_Index", "Fisheries_Index", "sst", "ssta",
-            "ph", "do", "salinitas", "chla", "current_speed",
-            "gelombang", "angin_u", "angin_v"
-        ]
+        ["Ocean_Health_Index","Fisheries_Index","sst","ssta",
+         "ph","do","salinitas","chla","current_speed","gelombang","angin_u","angin_v"]
     )
 
     st.markdown(f"**Analisis Parameter Klimatologi Laut — Mode {mode} — Matriks Aktif: `{parameter}` ({waktu_label})**")
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Rata-Rata (Mean)", f"{df_map[parameter].mean():.2f}")
-    col2.metric("Minimum (Min)", f"{df_map[parameter].min():.2f}")
-    col3.metric("Maksimum (Max)", f"{df_map[parameter].max():.2f}")
-    col4.metric("Deviasi Standar (Std)", f"{df_map[parameter].std():.2f}")
+    col2.metric("Minimum (Min)",    f"{df_map[parameter].min():.2f}")
+    col3.metric("Maksimum (Max)",   f"{df_map[parameter].max():.2f}")
+    col4.metric("Deviasi Standar",  f"{df_map[parameter].std():.2f}")
 
     st.write("<br>", unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4 = st.tabs(["🗺️ Spasial Kontur", "📈 Runtun Waktu (Time Series)", "📊 Deskriptif Statistik", "🔥 Korelasi Parameter"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🗺️ Spasial Kontur","📈 Runtun Waktu","📊 Deskriptif Statistik","🔥 Korelasi Parameter"])
 
     with tab1:
         if not df_map.empty:
             cmap_dict = {
-                'Fisheries_Index': 'Turbo', 'chla': 'Turbo',
-                'Ocean_Health_Index': 'Blues', 'do': 'Blues',
-                'ph': 'Viridis',
-                'salinitas': 'YlOrBr',
-                'sst': 'Thermal', 'ssta': 'RdBu',
+                'Fisheries_Index':'Turbo', 'chla':'Turbo',
+                'Ocean_Health_Index':'Blues', 'do':'Blues',
+                'ph':'Viridis', 'salinitas':'YlOrBr',
+                'sst':'Thermal', 'ssta':'RdBu',
             }
             cmap = cmap_dict.get(parameter, "Icefire")
-            fig_map = render_density_map(df_map, parameter, cmap, height=500)
-            st.plotly_chart(fig_map, use_container_width=True)
+            st.plotly_chart(render_map(df_map, parameter, cmap, height=500), use_container_width=True)
 
     with tab2:
-        df_ts_line = df.groupby('time')[parameter].mean().reset_index()
-        fig_ts = px.line(df_ts_line, x="time", y=parameter, title=f"Kurva Tren Temporal Jangka Panjang - Parameter {parameter} (2001-2020)")
+        df_ts = df.groupby('time')[parameter].mean().reset_index()
+        fig_ts = px.line(df_ts, x="time", y=parameter,
+                         title=f"Kurva Tren Temporal — {parameter} (2001–2020)")
         fig_ts.update_traces(line_color='#086982', line_width=2.5)
         fig_ts.update_layout(plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig_ts, use_container_width=True)
 
     with tab3:
-        st.markdown("##### 🔢 Deskriptif Ringkasan Kuantitatif Area Saringan Spasial")
+        st.markdown("##### 🔢 Deskriptif Ringkasan Kuantitatif")
         st.dataframe(df_map[[parameter]].describe().T, use_container_width=True)
 
     with tab4:
-        numeric_df = df.select_dtypes(include=np.number).drop(columns=['year', 'month'], errors='ignore')
-        fig_corr = px.imshow(numeric_df.corr(), text_auto=".2f", color_continuous_scale="RdBu", title="Matriks Korelasi Kuantitatif Pearson")
-        st.plotly_chart(fig_corr, use_container_width=True)
-# =========================================
-# 6. RENDER KONTEN UTAMA DASHBOARD
-# =========================================
-
-# --- A. LAYOUT NELAYAN (KONTUR HALUS MAKSIMAL) ---
-if st.session_state.role == "nelayan":
-    st.title("🐟 Dashboard Navigasi Nelayan - Perairan Papua")
-    st.markdown(f"### 🗺️ Peta Kontur Potensi Zona Tangkap Ikan — Mode {mode} ({waktu_label})")
-    
-    if not df_map.empty:
-        # 🌟 RADIUS DINAIKKAN KE 45: Membuat lingkaran melebur menyatu rata menjadi kontur halus ter-interpolasi penuh
-        fig_map = px.density_mapbox(
-            df_map, lat="lat", lon="lon", z="Fisheries_Index",
-            radius=45, opacity=0.85, zoom=4.8,
-            color_continuous_scale="Turbo", mapbox_style="open-street-map",
-            range_color=[float(df_map["Fisheries_Index"].min()), float(df_map["Fisheries_Index"].max())]
-        )
-        fig_map.update_layout(mapbox=dict(center=dict(lat=-8.0, lon=136.5)), margin={"r":0,"t":40,"l":0,"b":0}, height=540)
-        st.plotly_chart(fig_map, use_container_width=True)
-        
-        st.write("---")
-        st.markdown("### 🚨 Peringatan Pemanduan Lapangan Melaut")
-        mean_fsi = df_map['Fisheries_Index'].mean()
-        
-        if mean_fsi > 73:
-            st.success(f"🟢 **STATUS: SANGAT AMAN & BANYAK IKAN!** (Nilai Potensi: {mean_fsi:.1f}/100)\n\nNutrisi laut melimpah di perairan dalam Laut Arafura. Sangat direkomendasikan menurunkan jaring di area berwarna merah/oranye!")
-        elif mean_fsi > 55:
-            st.info(f"🔵 **STATUS: KONDISI AMAN NORMAL.** (Nilai Potensi: {mean_fsi:.1f}/100)\n\nPergerakan ikan konstan mengikuti arah pergerakan arus permukaan. Operasi nelayan berjalan stabil.")
-        else:
-            st.warning(f"🟡 **STATUS: WASPADA TANGKAPAN RENDAH.** (Nilai Potensi: {mean_fsi:.1f}/100)\n\nSuhu permukaan laut berfluktuasi. Disarankan memancing di sekitar pesisir pantai dekat teluk.")
-
-# --- B. LAYOUT AKADEMISI (KONTUR HALUS MAKSIMAL) ---
-else:
-    st.title("🎓 Portal Akademisi & Riset Oseanografi Papua")
-    
-    parameter = st.sidebar.selectbox(
-        "Pilih Parameter Riset:",
-        [
-            "Ocean_Health_Index", "Fisheries_Index", "sst", "ssta", 
-            "ph", "do", "salinitas", "chla", "current_speed", 
-            "gelombang", "angin_u", "angin_v"
-        ]
-    )
-    
-    st.markdown(f"**Analisis Parameter Klimatologi Laut — Mode {mode} — Matriks Aktif: `{parameter}` ({waktu_label})**")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Rata-Rata (Mean)", f"{df_map[parameter].mean():.2f}")
-    col2.metric("Minimum (Min)", f"{df_map[parameter].min():.2f}")
-    col3.metric("Maksimum (Max)", f"{df_map[parameter].max():.2f}")
-    col4.metric("Deviasi Standar (Std)", f"{df_map[parameter].std():.2f}")
-    
-    st.write("<br>", unsafe_allow_html=True)
-    
-    tab1, tab2, tab3, tab4 = st.tabs(["🗺️ Spasial Kontur", "📈 Runtun Waktu (Time Series)", "📊 Deskriptif Statistik", "🔥 Korelasi Parameter"])
-    
-    with tab1:
-        if not df_map.empty:
-            if parameter in ['Fisheries_Index', 'chla']: cmap = "Turbo"
-            elif parameter in ['Ocean_Health_Index', 'do']: cmap = "Blues"
-            elif parameter == 'ph': cmap = "Viridis"
-            elif parameter == 'salinitas': cmap = "YlOrBr"
-            elif parameter in ['sst', 'ssta']: cmap = "Thermal"
-            else: cmap = "Icefire"
-            
-            # 🌟 RADIUS 45 DIAPLIKASIKAN UNTUK AKADEMISI
-            fig_map = px.density_mapbox(
-                df_map, lat="lat", lon="lon", z=parameter,
-                radius=45, opacity=0.85, zoom=4.7, mapbox_style="open-street-map",
-                color_continuous_scale=cmap,
-                range_color=[float(df_map[parameter].min()), float(df_map[parameter].max())]
-            )
-            fig_map.update_layout(mapbox=dict(center=dict(lat=-8.0, lon=136.5)), margin={"r":0,"t":40,"l":0,"b":0}, height=500)
-            st.plotly_chart(fig_map, use_container_width=True)
-            
-    with tab2:
-        df_ts_line = df.groupby('time')[parameter].mean().reset_index()
-        fig_ts = px.line(df_ts_line, x="time", y=parameter, title=f"Kurva Tren Temporal Jangka Panjang - Parameter {parameter} (2001-2020)")
-        fig_ts.update_traces(line_color='#086982', line_width=2.5)
-        fig_ts.update_layout(plot_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig_ts, use_container_width=True)
-        
-    with tab3:
-        st.markdown("##### 🔢 Deskriptif Ringkasan Kuantitatif Area Saringan Spasial")
-        st.dataframe(df_map[[parameter]].describe().T, use_container_width=True)
-        
-    with tab4:
-        numeric_df = df.select_dtypes(include=np.number).drop(columns=['year', 'month'], errors='ignore')
-        fig_corr = px.imshow(numeric_df.corr(), text_auto=".2f", color_continuous_scale="RdBu", title="Matriks Korelasi Kuantitatif Pearson")
+        numeric_df = df.select_dtypes(include=np.number).drop(columns=['year','month'], errors='ignore')
+        fig_corr = px.imshow(numeric_df.corr(), text_auto=".2f",
+                             color_continuous_scale="RdBu",
+                             title="Matriks Korelasi Pearson")
         st.plotly_chart(fig_corr, use_container_width=True)
